@@ -870,39 +870,29 @@ onValue(ref(db, 'settings/allowPointChange'), (snap) => {
 
 // --- BLOK SEÇME MODAL FONKSİYONU ---
 window.openBlockModal = async () => {
-    // İnternet kontrolü
-    if(!navigator.onLine) { 
-        showAppModal("BAĞLANTI YOK", "Blok değiştirmek için internet lazım.", "wifi_off"); 
-        return; 
-    }
+    if(!navigator.onLine) { showAppModal("BAĞLANTI YOK", "Blok değiştirmek için internet lazım.", "wifi_off"); return; }
     
     const modal = document.getElementById('blockSelectModal');
     const area = document.getElementById('blockListArea');
-    
-    // Modalı aç ve yükleniyor yazısını bas
     modal.style.display = 'flex';
-    area.innerHTML = `<div style="color:#fff; padding:20px; text-align:center; font-weight:bold;">LİSTE ÇEKİLİYOR...</div>`;
+    area.innerHTML = `<div style="color:#fff; padding:20px; text-align:center;">LİSTE ÇEKİLİYOR...</div>`;
 
     try {
-        // Senin istediğin o hafifletilmiş yapı: Sadece noktaListe/siteID altını çekiyoruz
-        // Not: Eğer noktaListe direkt root altındaysa ref(db, 'noktaListe') olarak kalabilir
-        const listSnap = await get(ref(db, `noktaListe/${siteID}`)); 
+        // KRİTİK: rootSnap (Tüm DB) yerine sadece noktaListe'yi çekiyoruz
+        const listSnap = await get(ref(db, 'noktaListe'));
         
         if (listSnap.exists()) {
             area.innerHTML = "";
-            const blocks = listSnap.val(); 
+            const blocks = listSnap.val(); // Resmindeki { "eee": true } yapısı
 
-            // Veritabanındaki { "Blok A": true, "Blok B": true } yapısını dönüyoruz
             Object.keys(blocks).forEach(b => {
                 if(blocks[b] === true) {
                     const btn = document.createElement('button');
-                    
-                    // Senin orijinal buton stilin
-                    btn.style.cssText = "background:#222; color:#fff; border:1.5px solid var(--border); padding:18px; border-radius:20px; font-weight:900; font-size:13px; text-transform:uppercase; margin:8px; width:calc(100% - 16px); transition: 0.3s active;";
+                    // Orijinal stilini koruduk
+                    btn.style.cssText = "background:#222; color:#fff; border:1.5px solid var(--border); padding:18px; border-radius:20px; font-weight:900; font-size:13px; text-transform:uppercase; margin:5px;";
                     btn.innerText = b;
 
                     btn.onclick = async () => {
-                        // Tıklandığında aktif nöbeti bul
                         const nSnap = await get(nobetRef);
                         const activeKey = Object.keys(nSnap.val() || {}).find(k => 
                             nSnap.val()[k].startBy === (currentUser.name || currentUser.username) && 
@@ -910,34 +900,30 @@ window.openBlockModal = async () => {
                         );
 
                         if (activeKey) {
-                            // Seçilen ismi (b) direkt startPoint olarak gönderiyoruz
-                            // Bu sayede loadQRInterface fonksiyonun otomatik olarak "b + qrcodes"u bulacak
+                            // KRİTİK: 'b' değerini olduğu gibi gönderiyoruz (Büyük/Küçük harf hatası olmaması için)
+                            // Eğer veritabanında "eee" ise, startPoint "eee" olur. 
+                            // Sayfa yenilenince loadQRInterface de "eeeqrcodes"u hatasız bulur.
                             await update(ref(db, `nobetRecords/${activeKey}`), { 
                                 startPoint: b 
                             });
                             
-                            // Ayarı yap ve sayfayı tazele
                             location.reload(); 
-                        } else {
-                            showAppModal("HATA", "Aktif bir nöbet kaydı bulunamadı!", "error");
                         }
                     };
                     area.appendChild(btn);
                 }
             });
-            
-            // Eğer içinde true olan kayıt yoksa
-            if(area.innerHTML === "") {
-                area.innerHTML = `<div style="color:#fff; padding:20px; text-align:center;">AKTİF NOKTA BULUNAMADI</div>`;
-            }
-
         } else {
-            area.innerHTML = `<div style="color:#fff; padding:20px; text-align:center;">LİSTE BOŞ</div>`;
+            area.innerHTML = `<div style="color:#fff; padding:20px;">LİSTE BOŞ</div>`;
         }
     } catch(e) {
-        console.error("Blok listesi çekilirken hata:", e);
-        area.innerHTML = `<div style="color:#ff3b30; padding:20px; text-align:center;">HATA: Liste alınamadı!</div>`;
+        console.error("Hata:", e);
+        area.innerHTML = "Hata oluştu!";
     }
+};
+
+document.getElementById('incidentBtn').onclick = () => {
+    window.location.href = "olay.html";
 };
 </script>
 </body>
