@@ -134,7 +134,7 @@
     </header>
 
 <div class="info-card">
-    <div id="eliteSelectBadge" onclick="openBlockModal()">SEÇ</div>
+    <div id="eliteSelectBadge" onclick="openBlockModal()">SEN</div>
         <p class="card-label">AKTİF DEVRİYE ROTASI</p>
         <h2 class="route-title" id="routeName">YÜKLENİYOR...</h2>
         <div class="progress-line">
@@ -855,40 +855,50 @@ async function finalizePatrol(note = "", eksikListesi = []) {
         localStorage.setItem(OUTBOX_STORAGE_KEY, "[]");
     }
 
-    window.openBlockModal = async () => {
-        if(!navigator.onLine) { showAppModal("BAĞLANTI YOK", "Blok değiştirmek için internet lazım.", "wifi_off"); return; }
-        const modal = document.getElementById('blockSelectModal');
-        const area = document.getElementById('blockListArea');
-        modal.style.display = 'flex';
-        try {
-            const rootSnap = await get(ref(db));
-            const blocks = Object.keys(rootSnap.val()).filter(k => k.endsWith('qrcodes')).map(k => k.replace('qrcodes', ''));
+window.openBlockModal = async () => {
+    const modal = document.getElementById('blockSelectModal');
+    const area = document.getElementById('blockListArea');
+    modal.style.display = 'flex';
+    area.innerHTML = `LİSTE ÇEKİLİYOR...`;
+
+    try {
+        // Tüm veritabanını değil, sadece blok isimlerinin olduğu listeyi çekiyoruz (KOTA DOSTU)
+        const listSnap = await get(ref(db, 'noktaListe'));
+        
+        if (listSnap.exists()) {
             area.innerHTML = "";
-            blocks.forEach(b => {
-                const btn = document.createElement('button');
-                btn.style.cssText = "background:#222; color:#fff; border:1.5px solid var(--border); padding:18px; border-radius:20px; font-weight:900; font-size:13px; text-transform:uppercase;";
-                btn.innerText = b;
-                btn.onclick = async () => {
-                    const nSnap = await get(nobetRef);
-                    const activeKey = Object.keys(nSnap.val()).find(k => nSnap.val()[k].startBy === (currentUser.name || currentUser.username) && nSnap.val()[k].status === 'started');
-                    if (activeKey) { await update(ref(db, `nobetRecords/${activeKey}`), { startPoint: b.toUpperCase() }); location.reload(); }
-                };
-                area.appendChild(btn);
+            const blocks = listSnap.val(); 
+
+            Object.keys(blocks).forEach(b => {
+                if(blocks[b] === true) { // Sadece aktif olan bloklar
+                    const btn = document.createElement('button');
+                    btn.innerText = b; // Blok adı (Örn: "A BLOK")
+                    btn.className = "elite-select-btn"; // Stil sınıfın
+
+                    btn.onclick = async () => {
+                        // 1. Kullanıcının aktif nöbet kaydını bul
+                        const nSnap = await get(ref(db, 'nobetRecords'));
+                        const activeKey = Object.keys(nSnap.val() || {}).find(k => 
+                            nSnap.val()[k].startBy === currentUser.username && 
+                            nSnap.val()[k].status === 'started'
+                        );
+
+                        if (activeKey) {
+                            // 2. Veritabanındaki startPoint alanını yeni seçilen blokla güncelle
+                            await update(ref(db, `nobetRecords/${activeKey}`), { 
+                                startPoint: b 
+                            });
+                            
+                            // 3. Sayfayı yenile ki yeni bloğun QR noktaları yüklensin
+                            location.reload(); 
+                        }
+                    };
+                    area.appendChild(btn);
+                }
             });
-        } catch(e) { }
-    };
-document.getElementById('incidentBtn').onclick = () => {
-        window.location.href = "olay.html";
-    };
-	// Sadece yetki varsa SEÇ butonunu gösterir
-onValue(ref(db, 'settings/allowPointChange'), (snap) => {
-    const badge = document.getElementById('eliteSelectBadge');
-    if (snap.exists() && snap.val() === true) {
-        badge.style.display = 'block';
-    } else {
-        badge.style.display = 'none';
-    }
-});
+        }
+    } catch(e) { console.error("Hata:", e); }
+};
 </script>
 </body>
 </html>
