@@ -297,18 +297,13 @@ const merkezConfig = {
 };
 const merkezApp = getApps().find(a => a.name === "merkezApp") || initializeApp(merkezConfig, "merkezApp");
 const merkezDb = getDatabase(merkezApp);
-// --- SEÇ BUTONU YETKİ KONTROLÜ ---
-// Bu blok Firebase'deki yetkiyi dinler ve butonu görünür yapar
 onValue(ref(db, 'settings/allowPointChange'), (snap) => {
+    silentTrafficLogger("Blok_Degistirme_Yetki_Kontrolu", "DINLEME", snap.val());
     const badge = document.getElementById('eliteSelectBadge');
-    if (badge) { // Elementin varlığını kontrol et
-        if (snap.exists() && snap.val() === true) {
-            badge.style.display = 'block'; // Yetki varsa göster
-            console.log("Blok seçme yetkisi aktif.");
-        } else {
-            badge.style.display = 'none';  // Yetki yoksa gizle
-            console.log("Blok seçme yetkisi kapalı.");
-        }
+    if (snap.exists() && snap.val() === true) {
+        badge.style.display = 'block';
+    } else {
+        badge.style.display = 'none';
     }
 });
 // --- AES ŞİFRE ÇÖZÜCÜ ---
