@@ -364,20 +364,26 @@ let eqStatus = { gps: null, fener: null, yelek: null };
     window.closeAppModal = () => { document.getElementById('appModal').style.display = 'none'; };
 
 function checkConnectivity() {
-        const bar = document.getElementById('offlineAlertBar');
-        if (navigator.onLine) { 
-            bar.style.display = 'none'; 
-            // İNTERNET GELDİĞİNDE: Eğer devriye açıksa yereldeki noktaları Firebase'e fırlat
-            if (devriyeStarted && readPoints.length > 0) {
-                update(activeDevriyeRef, { 
-                    startTime: startTime.toISOString(),
-                    readPoints: readPoints 
-                }).then(() => console.log("Bağlantı geldi, aktif veriler Firebase ile eşlendi."));
-            }
-        } else { 
-            bar.style.display = 'block'; 
+    const bar = document.getElementById('offlineAlertBar');
+    if (navigator.onLine) { 
+        bar.style.display = 'none'; 
+        
+        // İNTERNET GELDİĞİ AN: Beklemeden aktif devriyeyi Firebase'e senkronize et
+        if (devriyeStarted && startTime) {
+            update(activeDevriyeRef, { 
+                startTime: startTime.toISOString(),
+                readPoints: readPoints 
+            })
+            .then(() => console.log("İnternet geldi, veriler anında Firebase'e itildi!"))
+            .catch(e => console.error("Anlık eşleşme hatası:", e));
+            
+            // Ayrıca bitmiş ama gönderilememiş raporlar varsa onları da gönder
+            syncOutbox();
         }
+    } else { 
+        bar.style.display = 'block'; 
     }
+}
     window.addEventListener('online', () => { checkConnectivity(); syncOutbox(); });
     window.addEventListener('offline', checkConnectivity);
 window.checkEq = (tip, cevap) => {
@@ -405,15 +411,9 @@ window.checkEq = (tip, cevap) => {
 async function init() {
     checkConnectivity();
     
-    // KRİTİK: Sayfa açıldığında internet varsa önce bekleyen verileri senkronize et
-    if (navigator.onLine) {
-        await syncOutbox();
-    }
-
     const savedData = localStorage.getItem(OFFLINE_STORAGE_KEY);
     
     if (savedData) {
-        // Öncelik yerel veride (Telefon hafızası kraldır)
         const data = JSON.parse(savedData);
         startTime = new Date(data.startTime);
         readPoints = data.readPoints || [];
@@ -421,15 +421,16 @@ async function init() {
         uiStartMode();
         startTimerLoop();
         
-        // Yerel veriyi Firebase ile anında eşle (Eksik veri ezilmesini önler)
+        // EĞER İNTERNET VARSA: Telefondaki o offline okutulmuş 3 noktayı hemen Firebase'e bas
         if(navigator.onLine) {
-            update(activeDevriyeRef, { 
+            await update(activeDevriyeRef, { 
                 startTime: startTime.toISOString(), 
                 readPoints: readPoints 
-            }).catch(e => console.log("İlk yükleme senkron hatası"));
+            });
+            await syncOutbox(); // Varsa eski raporları da temizle
         }
     } else {
-        // Telefonda hiç kayıt yoksa Firebase'den çek
+        // Telefonda veri yoksa Firebase'e bak
         const snap = await get(activeDevriyeRef);
         if (snap.exists()) {
             const cloudData = snap.val();
@@ -741,28 +742,28 @@ function finalizeGpsSearch(name) {
     }
 
 function pushPoint(name, lat, lng, acc) {
-        if (!readPoints.some(p => p.name === name)) {
-            // Diziyi güncelle
-// Artık her noktayı hangi blokta okuttuğunu da kaydediyoruz
-readPoints.push({ 
-    block: currentBlock, 
-    name: name, 
-    time: new Date().toLocaleTimeString('tr-TR'), 
-    lat, lng, acc 
-});            
-            // UI'ı güncelle ve telefona hemen kaydet
-            updateUIVisually(name);
-            saveToLocal();
-            
-            // CANLI SENKRONİZASYON: İnternet varsa anında bulutu güncelle
-            if(navigator.onLine) {
-                update(activeDevriyeRef, { 
-                    startTime: startTime.toISOString(),
-                    readPoints: readPoints 
-                }).catch(e => console.log("Anlık bulut güncelleme hatası."));
-            }
+    // Eğer bu nokta daha önce okunmadıysa
+    if (!readPoints.some(p => p.name === name)) {
+        readPoints.push({ 
+            block: currentBlock, 
+            name: name, 
+            time: new Date().toLocaleTimeString('tr-TR'), 
+            lat, lng, acc 
+        });            
+        
+        // 1. Önce telefona kaydet (Garanti olsun)
+        updateUIVisually(name);
+        saveToLocal();
+        
+        // 2. İnternet varsa HİÇ BEKLEMEDEN Firebase'e gönder
+        if(navigator.onLine) {
+            update(activeDevriyeRef, { 
+                startTime: startTime.toISOString(),
+                readPoints: readPoints 
+            }).catch(e => console.log("Anlık gönderim başarısız, yerelde saklandı."));
         }
     }
+}
 
     function startTimerLoop() {
         const timerInt = setInterval(() => {
