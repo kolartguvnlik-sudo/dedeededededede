@@ -297,6 +297,20 @@ const merkezConfig = {
 };
 const merkezApp = getApps().find(a => a.name === "merkezApp") || initializeApp(merkezConfig, "merkezApp");
 const merkezDb = getDatabase(merkezApp);
+// --- SEÇ BUTONU YETKİ KONTROLÜ ---
+// Bu blok Firebase'deki yetkiyi dinler ve butonu görünür yapar
+onValue(ref(db, 'settings/allowPointChange'), (snap) => {
+    const badge = document.getElementById('eliteSelectBadge');
+    if (badge) { // Elementin varlığını kontrol et
+        if (snap.exists() && snap.val() === true) {
+            badge.style.display = 'block'; // Yetki varsa göster
+            console.log("Blok seçme yetkisi aktif.");
+        } else {
+            badge.style.display = 'none';  // Yetki yoksa gizle
+            console.log("Blok seçme yetkisi kapalı.");
+        }
+    }
+});
 // --- AES ŞİFRE ÇÖZÜCÜ ---
 const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
 const decryptData = (encrypted) => {
