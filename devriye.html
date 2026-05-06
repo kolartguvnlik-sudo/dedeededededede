@@ -134,7 +134,7 @@
     </header>
 
 <div class="info-card">
-    <div id="eliteSelectBadge" onclick="openBlockModal()">SEN</div>
+    <div id="eliteSelectBadge" onclick="openBlockModal()">SEÇ</div>
         <p class="card-label">AKTİF DEVRİYE ROTASI</p>
         <h2 class="route-title" id="routeName">YÜKLENİYOR...</h2>
         <div class="progress-line">
@@ -364,20 +364,20 @@ let eqStatus = { gps: null, fener: null, yelek: null };
     window.closeAppModal = () => { document.getElementById('appModal').style.display = 'none'; };
 
 function checkConnectivity() {
-    const bar = document.getElementById('offlineAlertBar');
-    if (navigator.onLine) { 
-        bar.style.display = 'none'; 
-        
-        // İNTERNET GELDİĞİ AN:
-        if (devriyeStarted) {
-            // Yereldeki güncel listeyi Firebase'e bas
-            sendActiveDataToFirebase();
+        const bar = document.getElementById('offlineAlertBar');
+        if (navigator.onLine) { 
+            bar.style.display = 'none'; 
+            // İNTERNET GELDİĞİNDE: Eğer devriye açıksa yereldeki noktaları Firebase'e fırlat
+            if (devriyeStarted && readPoints.length > 0) {
+                update(activeDevriyeRef, { 
+                    startTime: startTime.toISOString(),
+                    readPoints: readPoints 
+                }).then(() => console.log("Bağlantı geldi, aktif veriler Firebase ile eşlendi."));
+            }
+        } else { 
+            bar.style.display = 'block'; 
         }
-        syncOutbox(); // Bitmiş devriyeler varsa onları da gönder
-    } else { 
-        bar.style.display = 'block'; 
     }
-}
     window.addEventListener('online', () => { checkConnectivity(); syncOutbox(); });
     window.addEventListener('offline', checkConnectivity);
 window.checkEq = (tip, cevap) => {
@@ -440,22 +440,6 @@ async function init() {
             readPoints: readPoints
         }));
     }
-	// --- SENKRONİZASYON MOTORU ---
-async function sendActiveDataToFirebase() {
-    if (!devriyeStarted || !navigator.onLine || !startTime) return;
-    
-    try {
-        // update yerine set kullanarak tüm objeyi tazeleyelim
-        await set(activeDevriyeRef, { 
-            startTime: startTime.toISOString(),
-            readPoints: readPoints, // Senin paylaştığın 0, 1, 2 şeklindeki liste
-            equipment: eqStatus     // Ekipmanları da kaybetmemek için ekledik
-        });
-        console.log("✅ Bulut senkronizasyonu tamam. Nokta sayısı:", readPoints.length);
-    } catch (e) {
-        console.error("❌ Senkronizasyon hatası:", e);
-    }
-}
 document.getElementById('backHomeBtn').onclick = () => {
     window.location.href = "guvenlik.html";
 };
@@ -475,63 +459,24 @@ function uiReadyMode() {
     document.getElementById('timerDisplay').innerText = "00:00:00";
 }
 
-async function loadQRInterface() {
+    async function loadQRInterface() {
         try {
-            // 1. Önce Mevcut Bloğu Tespit Et
             if(navigator.onLine) {
                 const nSnap = await get(nobetRef);
                 if (nSnap.exists()) {
-                    // Kullanıcının aktif nöbetini bul
-                    const active = Object.values(nSnap.val()).find(r => 
-                        (r.startBy === currentUser.name || r.startBy === currentUser.username) && 
-                        r.status === 'started'
-                    );
-                    if (active && active.startPoint) {
-                        currentBlock = active.startPoint.trim();
-                    }
+                    const active = Object.values(nSnap.val()).find(r => r.startBy === (currentUser.name || currentUser.username) && r.status === 'started');
+                    if (active) currentBlock = (active.startPoint || "BÖLGE").trim();
                 }
             }
-
-            // Eğer hala "BÖLGE" ise ve liste gelmiyorsa, ilk yükleme için varsayılanı düzelt
             document.getElementById('routeName').innerText = currentBlock.toUpperCase() + " ÇEVRESİ";
-
-            // 2. Cache Anahtarlarını Blok İsmi Belirlendikten Sonra Tanımla
-            const CACHE_KEY = `qr_cache_${currentBlock}`;
-            const VERSION_KEY = `qr_version_${currentBlock}`;
-
-            // 3. KOTA DOSTU AKILLI ÇEKİM
-            let localVersion = localStorage.getItem(VERSION_KEY) || "0";
-            let remoteVersion = localVersion;
-
-            if (navigator.onLine) {
-                const vSnap = await get(ref(db, `versions/${currentBlock}`));
-                remoteVersion = vSnap.exists() ? String(vSnap.val()) : "1";
-            }
-
-            const cachedQR = localStorage.getItem(CACHE_KEY);
-            let qrData = null;
-
-            if (localVersion === remoteVersion && cachedQR) {
-                qrData = JSON.parse(cachedQR);
-            } else if (navigator.onLine) {
-                // Burada `${currentBlock}qrcodes` yapısına bakıyor
-                const qrSnap = await get(ref(db, `${currentBlock}qrcodes`));
-                if (qrSnap.exists()) {
-                    qrData = qrSnap.val();
-                    localStorage.setItem(CACHE_KEY, JSON.stringify(qrData));
-                    localStorage.setItem(VERSION_KEY, remoteVersion);
-                }
-            }
-
-            // 4. Arayüzü Çiz
+const qrSnap = await get(ref(db, `${currentBlock}qrcodes`));
             const container = document.getElementById('qrListContainer');
-            container.innerHTML = ''; // Temizle
-
-            if (qrData) {
-                const points = Object.values(qrData);
+            if (qrSnap.exists()) {
+                container.innerHTML = '';
+                const points = Object.values(qrSnap.val());
                 refreshStats(points.length);
                 points.forEach(point => {
-                    const isRead = readPoints.some(rp => rp.name.trim().toLocaleLowerCase('tr-TR') === point.name.trim().toLocaleLowerCase('tr-TR'));
+const isRead = readPoints.some(rp => rp.name.trim().toLocaleLowerCase('tr-TR') === point.name.trim().toLocaleLowerCase('tr-TR'));
                     const div = document.createElement('div');
                     div.className = 'qr-card';
                     div.innerHTML = `
@@ -544,12 +489,16 @@ async function loadQRInterface() {
                         </div>
                     `;
 
+                    // TIKLAMA OLAYI
                     div.onclick = () => { 
-                        const suAnOkunmusMu = readPoints.some(rp => rp.name.trim().toLocaleLowerCase('tr-TR') === point.name.trim().toLocaleLowerCase('tr-TR'));
+                        // ÖNEMLİ: Her tıklamada readPoints listesini kontrol eder (Sayfa yenilenmese bile)
+                        const suAnOkunmusMu = readPoints.some(rp => rp.name === point.name);
+
                         if(suAnOkunmusMu) { 
                             showAppModal("TAMAMLANDI", "Bu noktayı zaten başarıyla doğruladınız.", "verified"); 
                             return; 
                         }
+                        
                         if(devriyeStarted) {
                             openQRScanner(point.qrId, point.name); 
                         } else {
@@ -558,13 +507,10 @@ async function loadQRInterface() {
                     };
                     container.appendChild(div);
                 });
-            } else {
-                container.innerHTML = `<div style="color:#888; text-align:center; padding:20px;">Bu bölgeye ait nokta bulunamadı (${currentBlock})</div>`;
             }
-        } catch (e) { 
-            console.error("Arayüz yükleme hatası:", e); 
-        }
+        } catch (e) { console.error("Arayüz yükleme hatası:", e); }
     }
+
     function refreshStats(totalCount = null) {
         const total = totalCount || document.querySelectorAll('.qr-card').length;
         const current = readPoints.length;
@@ -745,25 +691,29 @@ function finalizeGpsSearch(name) {
     }
 
 function pushPoint(name, lat, lng, acc) {
-    // 1. Önce listeye ekle (Burası zaten sende var)
-    if (!readPoints.some(p => p.name === name)) {
-        readPoints.push({ 
-            block: currentBlock, 
-            name: name, 
-            time: new Date().toLocaleTimeString('tr-TR'), 
-            lat, lng, acc 
-        });            
-        
-        // 2. Arayüzü ve Yereli güncelle
-        updateUIVisually(name);
-        saveToLocal();
-        
-        // 3. İNTERNET VARSA ANINDA GÖNDER
-        if (navigator.onLine) {
-            sendActiveDataToFirebase(); 
+        if (!readPoints.some(p => p.name === name)) {
+            // Diziyi güncelle
+// Artık her noktayı hangi blokta okuttuğunu da kaydediyoruz
+readPoints.push({ 
+    block: currentBlock, 
+    name: name, 
+    time: new Date().toLocaleTimeString('tr-TR'), 
+    lat, lng, acc 
+});            
+            // UI'ı güncelle ve telefona hemen kaydet
+            updateUIVisually(name);
+            saveToLocal();
+            
+            // CANLI SENKRONİZASYON: İnternet varsa anında bulutu güncelle
+            if(navigator.onLine) {
+                update(activeDevriyeRef, { 
+                    startTime: startTime.toISOString(),
+                    readPoints: readPoints 
+                }).catch(e => console.log("Anlık bulut güncelleme hatası."));
+            }
         }
     }
-}
+
     function startTimerLoop() {
         const timerInt = setInterval(() => {
             if(!devriyeStarted) { clearInterval(timerInt); return; }
@@ -900,14 +850,37 @@ async function finalizePatrol(note = "", eksikListesi = []) {
         const outbox = JSON.parse(localStorage.getItem(OUTBOX_STORAGE_KEY) || "[]");
         if (outbox.length === 0) return;
         for (const log of outbox) {
-            try { await push(ref(db, `devriyeHistory/${log.dateKey}/${log.user}`), log);
-		} catch (e) {}
-			
+            try { await push(ref(db, `devriyeHistory/${log.dateKey}/${log.user}`), log); } catch (e) {}
         }
         localStorage.setItem(OUTBOX_STORAGE_KEY, "[]");
     }
 
-// 1. SEÇ BUTONU YETKİ KONTROLÜ (Aynen Korundu)
+    window.openBlockModal = async () => {
+        if(!navigator.onLine) { showAppModal("BAĞLANTI YOK", "Blok değiştirmek için internet lazım.", "wifi_off"); return; }
+        const modal = document.getElementById('blockSelectModal');
+        const area = document.getElementById('blockListArea');
+        modal.style.display = 'flex';
+        try {
+            const rootSnap = await get(ref(db));
+            const blocks = Object.keys(rootSnap.val()).filter(k => k.endsWith('qrcodes')).map(k => k.replace('qrcodes', ''));
+            area.innerHTML = "";
+            blocks.forEach(b => {
+                const btn = document.createElement('button');
+                btn.style.cssText = "background:#222; color:#fff; border:1.5px solid var(--border); padding:18px; border-radius:20px; font-weight:900; font-size:13px; text-transform:uppercase;";
+                btn.innerText = b;
+                btn.onclick = async () => {
+                    const nSnap = await get(nobetRef);
+                    const activeKey = Object.keys(nSnap.val()).find(k => nSnap.val()[k].startBy === (currentUser.name || currentUser.username) && nSnap.val()[k].status === 'started');
+                    if (activeKey) { await update(ref(db, `nobetRecords/${activeKey}`), { startPoint: b.toUpperCase() }); location.reload(); }
+                };
+                area.appendChild(btn);
+            });
+        } catch(e) { }
+    };
+document.getElementById('incidentBtn').onclick = () => {
+        window.location.href = "olay.html";
+    };
+	// Sadece yetki varsa SEÇ butonunu gösterir
 onValue(ref(db, 'settings/allowPointChange'), (snap) => {
     const badge = document.getElementById('eliteSelectBadge');
     if (snap.exists() && snap.val() === true) {
@@ -916,65 +889,6 @@ onValue(ref(db, 'settings/allowPointChange'), (snap) => {
         badge.style.display = 'none';
     }
 });
-
-// 2. KOTA DOSTU BLOK LİSTELEME MANTIĞI
-window.openBlockModal = async () => {
-    if(!navigator.onLine) { showAppModal("BAĞLANTI YOK", "Blok değiştirmek için internet lazım.", "wifi_off"); return; }
-    
-    const modal = document.getElementById('blockSelectModal');
-    const area = document.getElementById('blockListArea');
-    modal.style.display = 'flex';
-    area.innerHTML = `<div style="color:#fff; padding:20px; text-align:center;">LİSTE ÇEKİLİYOR...</div>`;
-
-    try {
-        // KRİTİK: rootSnap (Tüm DB) yerine sadece noktaListe'yi çekiyoruz
-        const listSnap = await get(ref(db, 'noktaListe'));
-        
-        if (listSnap.exists()) {
-            area.innerHTML = "";
-            const blocks = listSnap.val(); // Resmindeki { "eee": true } yapısı
-
-            Object.keys(blocks).forEach(b => {
-                if(blocks[b] === true) {
-                    const btn = document.createElement('button');
-                    // Orijinal stilini koruduk
-                    btn.style.cssText = "background:#222; color:#fff; border:1.5px solid var(--border); padding:18px; border-radius:20px; font-weight:900; font-size:13px; text-transform:uppercase; margin:5px;";
-                    btn.innerText = b;
-
-                    btn.onclick = async () => {
-                        const nSnap = await get(nobetRef);
-                        const activeKey = Object.keys(nSnap.val() || {}).find(k => 
-                            nSnap.val()[k].startBy === (currentUser.name || currentUser.username) && 
-                            nSnap.val()[k].status === 'started'
-                        );
-
-                        if (activeKey) {
-                            // KRİTİK: 'b' değerini olduğu gibi gönderiyoruz (Büyük/Küçük harf hatası olmaması için)
-                            // Eğer veritabanında "eee" ise, startPoint "eee" olur. 
-                            // Sayfa yenilenince loadQRInterface de "eeeqrcodes"u hatasız bulur.
-                            await update(ref(db, `nobetRecords/${activeKey}`), { 
-                                startPoint: b 
-                            });
-                            
-                            location.reload(); 
-                        }
-                    };
-                    area.appendChild(btn);
-                }
-            });
-        } else {
-            area.innerHTML = `<div style="color:#fff; padding:20px;">LİSTE BOŞ</div>`;
-        }
-    } catch(e) {
-        console.error("Hata:", e);
-        area.innerHTML = "Hata oluştu!";
-    }
-};
-
-document.getElementById('incidentBtn').onclick = () => {
-    window.location.href = "olay.html";
-};
-
 </script>
 </body>
 </html>
