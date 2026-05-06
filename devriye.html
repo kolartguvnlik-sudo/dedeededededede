@@ -134,7 +134,7 @@
     </header>
 
 <div class="info-card">
-    <div id="eliteSelectBadge" onclick="openBlockModal()">SE</div>
+    <div id="eliteSelectBadge" onclick="openBlockModal()">SEN</div>
         <p class="card-label">AKTİF DEVRİYE ROTASI</p>
         <h2 class="route-title" id="routeName">YÜKLENİYOR...</h2>
         <div class="progress-line">
@@ -442,16 +442,18 @@ async function init() {
     }
 	// --- SENKRONİZASYON MOTORU ---
 async function sendActiveDataToFirebase() {
-    if (!devriyeStarted || !navigator.onLine) return;
+    if (!devriyeStarted || !navigator.onLine || !startTime) return;
     
     try {
-        await update(activeDevriyeRef, { 
+        // update yerine set kullanarak tüm objeyi tazeleyelim
+        await set(activeDevriyeRef, { 
             startTime: startTime.toISOString(),
-            readPoints: readPoints 
+            readPoints: readPoints, // Senin paylaştığın 0, 1, 2 şeklindeki liste
+            equipment: eqStatus     // Ekipmanları da kaybetmemek için ekledik
         });
-        console.log("Bulut eşitlemesi başarılı.");
+        console.log("✅ Bulut senkronizasyonu tamam. Nokta sayısı:", readPoints.length);
     } catch (e) {
-        console.error("Senkronizasyon hatası:", e);
+        console.error("❌ Senkronizasyon hatası:", e);
     }
 }
 document.getElementById('backHomeBtn').onclick = () => {
@@ -743,6 +745,7 @@ function finalizeGpsSearch(name) {
     }
 
 function pushPoint(name, lat, lng, acc) {
+    // 1. Önce listeye ekle (Burası zaten sende var)
     if (!readPoints.some(p => p.name === name)) {
         readPoints.push({ 
             block: currentBlock, 
@@ -751,13 +754,13 @@ function pushPoint(name, lat, lng, acc) {
             lat, lng, acc 
         });            
         
-        // Önce UI ve Yerel Hafıza (İnternet olsa da olmasa da)
+        // 2. Arayüzü ve Yereli güncelle
         updateUIVisually(name);
         saveToLocal();
         
-        // İnternet varsa hemen gönder
-        if(navigator.onLine) {
-            sendActiveDataToFirebase();
+        // 3. İNTERNET VARSA ANINDA GÖNDER
+        if (navigator.onLine) {
+            sendActiveDataToFirebase(); 
         }
     }
 }
