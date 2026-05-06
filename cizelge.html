@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CGA - Personel Devam Çizelgesi</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <style>
+        :root { --border-color: #000; --active-bg: #e8f5e9; --sunday-color: #ff0000; }
+        body { margin:0; font-family:'Montserrat', sans-serif; background: #f4f7f6; color:#000; padding: 10px; }
+        .page-container { background: #fff; padding: 15px; border: 1px solid #000; max-width: 1600px; margin: auto; }
+        .top-info { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
+        .top-info td { border: 1px solid var(--border-color); padding: 5px; font-weight: bold; font-size: 13px; }
+        .header-main-title { text-align: center; font-size: 16px; font-weight: bold; padding: 5px; cursor: pointer; border: 1px solid #000; border-bottom: none; }
+        
+        /* TABLO SABİTLEME MANTIĞI */
+        .main-table-container { width: 100%; overflow-x: auto; position: relative; border: 1px solid #000; }
+        .main-table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1300px; }
+        .main-table th, .main-table td { border: 1px solid var(--border-color); text-align: center; padding: 2px; font-size: 11px; height: 30px; background: #fff; }
+        
+        /* İSİM VE SNO SABİTLEME */
+/* Sadece İsim Sütununu Sabitle, SNO Kaybolsun */
+.sticky-col { 
+    position: sticky; 
+    z-index: 2; 
+    background: #fff !important; 
+}
+
+/* S.No artık sabit değil, normal sütun gibi davranacak */
+.col-sno { 
+    width: 30px; 
+    z-index: 1; /* İsmin altında kalması için */
+    border-right: 1px solid var(--border-color) !important;
+}
+
+/* Adı Soyadı en sola (0 noktasına) yapışacak */
+.col-name { 
+    left: 0 !important; /* SNO kaybolunca bu en sola geçer */
+    width: 115px; 
+    z-index: 3; 
+    text-align: left !important; 
+    padding-left: 5px !important;
+    font-size: 10px !important;
+    line-height: 1.2;
+    white-space: normal !important;
+    border-right: 2px solid #000 !important; /* Takvimle sınırı netleştirir */
+    cursor: pointer; /* Tıklanabilir olduğunu hissettir */
+}
+
+/* Telefon sütunu ve diğerleri zaten akışta */
+.col-phone { width: 80px; font-size: 10px; }
+.col-day { width: 30px; }
+
+/* Hücrelerin içindeki beyaz boşlukları (padding) öldürelim */
+.main-table td {
+    padding: 0 !important;
+}
+        
+        .main-table th { background: #eee; }
+        .col-phone { width: 100px; }
+        .col-day { width: 25px; }
+        .col-total { width: 75px; font-size: 9px; line-height: 1; }
+        input { width: 100%; border: none; text-align: center; font-family: 'Montserrat'; outline: none; background: transparent; font-weight: bold; font-size: 11px; height: 100%; }
+        .active-row { background: var(--active-bg); }
+        .locked-row { background: #f2f2f2; color: #666; }
+        th.is-sunday { border: 2px solid var(--sunday-color) !important; color: var(--sunday-color); background: #ffebee !important; }
+
+        /* AÇIKLAMALAR - BİRBİRİNE YAKIN */
+        .legend-bar { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        .legend-bar td { border: 1px solid var(--border-color); padding: 5px; font-size: 10px; }
+        .legend-title { font-weight: bold; background: #eee; width: 100px; text-align: center; }
+        .l-item { margin-right: 8px; display: inline-block; white-space: nowrap; }
+
+        /* ALT TABLOLAR - TEK SÜTUN DİZİLİM */
+        .bottom-grid { display: flex; flex-direction: column; gap: 15px; }
+        .sub-table-container { width: 100%; }
+        .sub-title { font-weight: bold; text-align: center; font-size: 12px; margin-bottom: 3px; text-transform: uppercase; background: #eee; padding: 4px; border: 1px solid #000; }
+        .sub-table { width: 100%; border-collapse: collapse; }
+        .sub-table th, .sub-table td { border: 1px solid var(--border-color); padding: 4px; font-size: 11px; text-align: center; height: 24px; }
+        
+/* Buton Kutusu Düzenleme */
+.btn-box {
+    display: flex;
+    flex-direction: column; /* Mobilde alt alta diz */
+    gap: 10px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-top: 1px solid #ddd;
+}
+
+/* Butonların Genel Ayarı */
+.btn-box button {
+    width: 100%; /* Mobilde tam genişlik */
+    height: 45px;
+    border-radius: 8px;
+    border: 1px solid #000;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s;
+}
+
+/* Ek Bilgi Butonu Özel Stil */
+.btn-extra {
+    background: #2980b9 !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 4px 6px rgba(41, 128, 185, 0.2);
+}
+
+/* Sistem Online Yazısı */
+#statusInfo {
+    background: transparent !important;
+    border: none !important;
+    font-size: 12px;
+    color: #27ae60 !important;
+}
+
+/* Masaüstünde Yan Yana Dursunlar */
+@media (min-width: 600px) {
+    .btn-box {
+        flex-direction: row;
+    }
+}       button { padding: 10px 20px; cursor: pointer; border: 1px solid #000; background: #fff; font-weight: bold; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+        .modal-content { background: #fff; margin: 15% auto; padding: 20px; width: 300px; border: 2px solid #000; text-align: center; }
+        /* Yeni Açıklama Alanı Tasarımı */
+/* Açıklamalar Şeridi - Modern ve Kompakt */
+.legend-container {
+    display: flex;
+    flex-wrap: nowrap; /* Yan yana kalmaya zorlar */
+    overflow-x: auto;  /* Mobilde sağa kaydırılabilir yapar */
+    gap: 10px;
+    padding: 8px 12px;
+    background: #fff;
+    border: 1px solid #000;
+    margin: 10px 0;
+    -webkit-overflow-scrolling: touch; /* Yumuşak kaydırma */
+}
+
+/* Kaydırma çubuğunu gizle (isteğe bağlı, daha temiz görünür) */
+.legend-container::-webkit-scrollbar {
+    display: none;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    padding: 2px 8px 2px 2px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap; /* Metnin kırılmasını engeller */
+}
+
+.legend-item b {
+    display: inline-block;
+    color: #fff;
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-right: 5px;
+    min-width: 18px;
+    text-align: center;
+    font-size: 10px;
+}
+
+.l-v { background: #34495e !important; } /* Vardiyalar - Koyu Gri/Mavi */
+.l-i { background: #d35400 !important; } /* İzinler - Koyu Turuncu */
+/* Vardiya Tablosuna Özel Düzenleme */
+#tableVardiya {
+    table-layout: fixed; /* Sütun genişliklerini sabit tutar */
+    width: 100%;
+}
+
+#tableVardiya th:first-child, 
+#tableVardiya td:first-child {
+    width: 45%; /* Vardiya ismi alanı */
+    text-align: left;
+    padding-left: 10px;
+    white-space: nowrap; /* Metnin alt satıra düşmesini engeller */
+}
+
+/* Vardiya Tablosu Saat Giriş Alanlarını Düzenle */
+#tableVardiya input {
+    width: 100%;
+    height: 100%;
+    background: transparent; /* Arka planı hücreyle birleştirir */
+    border: none !important;  /* Beyaz kutu görünümünü kaldırır */
+    outline: none;           /* Tıklandığında çıkan çerçeveyi yok eder */
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    font-weight: bold;
+    color: #000;
+    text-align: center;
+    padding: 0;
+    margin: 0;
+    display: block;
+}
+
+/* Hücrelere tıklandığında hangi alanın seçili olduğunu anlamak için hafif bir efekt */
+#tableVardiya td:has(input:focus) {
+    background-color: #f0f0f0;
+}
+/* Alt Tablo (İzin, Başlayan, Ayrılan) Giriş Alanları */
+.sub-table input {
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    border: none !important;
+    outline: none;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    color: #000;
+    padding: 2px 5px; /* Yazının kenarlara yapışmasını önler */
+    box-sizing: border-box;
+}
+
+/* İsim sütununu (genelde 2. sütun veya ilk input) genişletmek ve sola yaslamak için */
+/* Ad Soyad Inputunu Küçültme ve Düzenleme */
+.sub-table td:has(input[data-extra*="_ad"]) {
+    width: 35%; /* Çok genişlememesi için sabit yüzde */
+    min-width: 120px; /* Mobilde aşırı daralmaması için alt sınır */
+}
+
+.sub-table input[data-extra*="_ad"] {
+    font-size: 10px !important; /* Yazı fontunu bir tık küçülttük */
+    letter-spacing: -0.2px; /* Harfleri hafifçe yaklaştırdık */
+    text-transform: uppercase; /* İsimlerin hep büyük harf kalması için */
+}
+
+/* Tüm alt tablo inputları için genel bir nefes payı */
+.sub-table input {
+    padding: 2px 4px; 
+}
+/* --- SÜTUN GENİŞLİKLERİNİ DARALTMA (YENİ) --- */
+
+.col-sno { 
+    left: 0; 
+    width: 25px; /* 35'ten düştü */
+    z-index: 3; 
+}
+
+.col-name { 
+    left: 25px; /* SNO daraldığı için bu da sola kaydı */
+    width: 110px; /* 160'tan düştü - Ciddi yer kazancı */
+    z-index: 3; 
+    text-align: left !important; 
+    padding-left: 3px !important;
+    font-size: 10px !important; /* İsimler sığsın diye biraz küçüldü */
+    line-height: 1.1; /* Uzun isimler iki satıra düzgün binsin */
+    white-space: normal !important; /* İsim çok uzunsa taşmasın, alta geçsin */
+}
+
+.col-phone { 
+    width: 75px; /* 100'den düştü */
+    font-size: 9px !important;
+}
+
+.col-day { 
+    width: 28px; /* Gün kutucukları dokunmatik için ideal boyutta kaldı */
+}
+
+/* Tablonun toplam minimum genişliğini de biraz kısalttık ki daha rahat kaysın */
+.main-table { 
+    width: 100%; 
+    border-collapse: collapse; 
+    table-layout: fixed; 
+    min-width: 1100px; /* 1300'den düştü */
+}
+
+/* Inputların içindeki boşlukları (padding) sıfırlayarak kutuyu tam doldurmasını sağladık */
+.main-table td input {
+    padding: 0;
+    margin: 0;
+    width: 100%;
+}
+
+
+
+/* Veri girildiğinde (boş değilse) çizgiyi kaldır */
+.cancelled-row .day-input:not([value=""]) {
+    background: none !important;
+}
+.cancelled-row td { position: relative; }
+.line-overlay {
+    display: none; 
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background-color: #ff0000;
+    z-index: 5;
+    pointer-events: none;
+    transform: translateY(-50%);
+}
+/* Boşsa göster */
+.cancelled-row .day-input[value=""] + .line-overlay, 
+.cancelled-row .day-input:not([value]) + .line-overlay {
+    display: block;
+}
+    </style>
+</head>
+<body>
+
+<div class="page-container">
+    <div class="header-main-title" id="secretTrigger">PERSONEL DEVAM ÇİZELGESİ</div>
+    
+    <table class="top-info">
+        <tr>
+            <td style="width: 120px;">Proje Adı</td>
+            <td id="prjName">Yükleniyor...</td>
+            <td rowspan="2" style="text-align: center; width: 350px; font-size: 18px; letter-spacing: 1px;">
+                <span id="headerMonthYear" style="text-decoration: underline;">-- / 2026</span>
+            </td>
+        </tr>
+        <tr>
+            <td>Dönemi</td>
+            <td id="prjPeriod">--</td>
+        </tr>
+    </table>
+
+    <div class="main-table-container">
+        <table class="main-table">
+            <thead>
+                <tr id="tableHeader">
+                    <th class="col-sno sticky-col">S.No</th>
+                    <th class="col-name sticky-col">Adı Soyadı</th>
+                    <th class="col-phone">Telefon No</th>
+                    <th class="col-total">Resmi Tatil<br>Mesai Saati</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+<div class="legend-container">
+    <div class="legend-item"><b class="l-v">A</b> Gündüz V.</div>
+    <div class="legend-item"><b class="l-v">B</b> Gece V.</div>
+    <div class="legend-item"><b class="l-v">A1</b> Gündüz/Gece V.</div>
+    <div class="legend-item"><b class="l-v">B1</b> Gece/Gündüz V.</div>
+    <div class="legend-item"><b class="l-i">H</b> Hafta İzni</div>
+    <div class="legend-item"><b class="l-i">R</b> Rapor</div>
+    <div class="legend-item"><b class="l-i">Ü</b> Ücretsiz İzin</div>
+    <div class="legend-item"><b class="l-i">S</b> Senelik İzin</div>
+    <div class="legend-item"><b class="l-i">D</b> Doğum İzni</div>
+    <div class="legend-item"><b class="l-i">Ö</b> Ölüm İzni</div>
+    <div class="legend-item"><b class="l-i">E</b> Evlenme İzni</div>
+</div>
+
+    <div class="bottom-grid">
+        <div class="sub-table-container">
+            <div class="sub-title">AY İÇİNDE PROJEYE BAŞLAYAN PERSONELLER</div>
+            <table class="sub-table" id="tableBaslayan">
+                <tr><th style="width:40px;">S.NO</th><th>Adı Soyadı</th><th>Başlama Tarihi</th></tr>
+                <tr><td>1</td><td><input type="text" data-extra="baslayan_1_ad"></td><td><input type="text" data-extra="baslayan_1_tarih"></td></tr>
+                <tr><td>2</td><td><input type="text" data-extra="baslayan_2_ad"></td><td><input type="text" data-extra="baslayan_2_tarih"></td></tr>
+                <tr><td>3</td><td><input type="text" data-extra="baslayan_3_ad"></td><td><input type="text" data-extra="baslayan_3_tarih"></td></tr>
+                <tr><td>4</td><td><input type="text" data-extra="baslayan_4_ad"></td><td><input type="text" data-extra="baslayan_4_tarih"></td></tr>
+            </table>
+        </div>
+
+        <div class="sub-table-container">
+            <div class="sub-title">AY İÇİNDE PROJEDEN AYRILAN PERSONELLER</div>
+            <table class="sub-table" id="tableAyrilan">
+                <tr><th style="width:40px;">S.NO</th><th>Adı Soyadı</th><th>Ayrılma Tarihi</th></tr>
+                <tr><td>1</td><td><input type="text" data-extra="ayrilan_1_ad"></td><td><input type="text" data-extra="ayrilan_1_tarih"></td></tr>
+                <tr><td>2</td><td><input type="text" data-extra="ayrilan_2_ad"></td><td><input type="text" data-extra="ayrilan_2_tarih"></td></tr>
+                <tr><td>3</td><td><input type="text" data-extra="ayrilan_3_ad"></td><td><input type="text" data-extra="ayrilan_3_tarih"></td></tr>
+                <tr><td>4</td><td><input type="text" data-extra="ayrilan_4_ad"></td><td><input type="text" data-extra="ayrilan_4_tarih"></td></tr>
+            </table>
+        </div>
+
+    <div class="sub-table-container">
+    <div class="sub-title">VARDİYALAR</div>
+    <table class="sub-table" id="tableVardiya">
+        <thead>
+            <tr>
+                <th>Vardiyalar</th>
+                <th>Başlama Saati</th>
+                <th>Bitiş Saati</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><b>A</b> - Gündüz</td>
+                <td><input type="text" class="time-mask" data-extra="v_a_bas" placeholder="00:00"></td>
+                <td><input type="text" class="time-mask" data-extra="v_a_bit" placeholder="00:00"></td>
+            </tr>
+            <tr>
+                <td><b>B</b> - Gece</td>
+                <td><input type="text" class="time-mask" data-extra="v_b_bas" placeholder="00:00"></td>
+                <td><input type="text" class="time-mask" data-extra="v_b_bit" placeholder="00:00"></td>
+            </tr>
+            <tr>
+                <td><b>A1</b> - Gündüz/Gece</td>
+                <td><input type="text" class="time-mask" data-extra="v_a1_bas" placeholder="00:00"></td>
+                <td><input type="text" class="time-mask" data-extra="v_a1_bit" placeholder="00:00"></td>
+            </tr>
+            <tr>
+                <td><b>B1</b> - Gece/Gündüz</td>
+                <td><input type="text" class="time-mask" data-extra="v_b1_bas" placeholder="00:00"></td>
+                <td><input type="text" class="time-mask" data-extra="v_b1_bit" placeholder="00:00"></td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+        <div class="sub-table-container">
+            <div class="sub-title">AY İÇİNDE İZİN / RAPOR KULLANAN PERSONEL</div>
+            <table class="sub-table" id="tableIzin">
+                <tr><th>Adı Soyadı</th><th>İzin / Rapor</th><th>Başlama Tarihi</th><th>Bitiş Tarihi</th></tr>
+                <tr><td><input type="text" data-extra="izin_1_ad"></td><td><input type="text" data-extra="izin_1_tur"></td><td><input type="text" data-extra="izin_1_bas"></td><td><input type="text" data-extra="izin_1_bit"></td></tr>
+                <tr><td><input type="text" data-extra="izin_2_ad"></td><td><input type="text" data-extra="izin_2_tur"></td><td><input type="text" data-extra="izin_2_bas"></td><td><input type="text" data-extra="izin_2_bit"></td></tr>
+                <tr><td><input type="text" data-extra="izin_3_ad"></td><td><input type="text" data-extra="izin_3_tur"></td><td><input type="text" data-extra="izin_3_bas"></td><td><input type="text" data-extra="izin_3_bit"></td></tr>
+                <tr><td><input type="text" data-extra="izin_4_ad"></td><td><input type="text" data-extra="izin_4_tur"></td><td><input type="text" data-extra="izin_4_bas"></td><td><input type="text" data-extra="izin_4_bit"></td></tr>
+            </table>
+        </div>
+    </div>
+
+   <div class="btn-box">
+    <button onclick="window.location.href='guvenlik.html'">⬅ GERİ DÖN</button>
+    <button onclick="window.location.href='mesai.html'" style="background: #2980b9; color: white;">➕ EK BİLGİ </button>
+    <button id="statusInfo" style="border:none; color:#27ae60">● SİSTEM ONLİNE</button>
+</div>
+</div>
+
+<div id="amirModal" class="modal">
+    <div class="modal-content">
+        <h4 id="modalTitle">Yetkili Seçimi</h4>
+        <div id="modalContent">
+            <select id="userSelect" style="width:100%; padding:10px; margin-bottom:10px;"></select>
+            <button id="setAmirBtn" style="width:100%; background:#000; color:#fff; margin-bottom:5px; padding:10px;">YETKİ VER</button>
+        </div>
+        <button onclick="document.getElementById('amirModal').style.display='none'" style="width:100%; padding:10px; margin-top:5px;">İPTAL</button>
+    </div>
+</div>
+
+<script type="module">
+  import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { getDatabase, ref, get, set } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+
+  // --- CGA ELITE GÜVENLİ BAŞLATMA ---
+const SECURITY_KEY = "KOLART_SİSTEM_2026_CGA";
+const siteID = localStorage.getItem("siteID");
+const encryptedConfig = localStorage.getItem("siteConfig");
+
+// Şifreli config çözme (Index'e atılmayı önleyen anahtar)
+let siteConfig = null;
+try {
+    if (encryptedConfig) {
+        if (typeof CryptoJS !== 'undefined') {
+            const bytes = CryptoJS.AES.decrypt(encryptedConfig, SECURITY_KEY);
+            const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+            siteConfig = decrypted ? JSON.parse(decrypted) : JSON.parse(encryptedConfig);
+        } else {
+            siteConfig = JSON.parse(encryptedConfig);
+        }
+    }
+} catch (e) {
+    try { siteConfig = JSON.parse(encryptedConfig); } catch(err) { siteConfig = null; }
+}
+
+// Kullanıcıyı hem session hem local'den kontrol et
+const currentUser = JSON.parse(sessionStorage.getItem('currentUser')) || JSON.parse(localStorage.getItem('currentUser'));
+
+// Bariyer
+if (!siteConfig) { window.location.href = "index.html"; }
+
+const app = getApps().find(a => a.name === `siteApp-${siteID}`) || initializeApp(siteConfig, `siteApp-${siteID}`);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+// --- KRİTİK GÜVENLİK KONTROLÜ ---
+// --- KRİTİK GÜVENLİK KONTROLÜ (ELITE VERSION) ---
+onAuthStateChanged(auth, (user) => {
+    // Firebase geç cevap verse bile currentUser varsa içeri al
+    if (!user && !currentUser) {
+        window.location.href = "index.html";
+    } else {
+        console.log("Çizelge yetkisi doğrulandı.");
+        // Sayfa container'ının ID veya class'ına göre görünür yap
+        const container = document.querySelector('.page-container');
+        if(container) container.style.display = 'block';
+        initPage();
+    }
+});
+
+    const simdi = new Date();
+    const ay = simdi.getMonth() + 1;
+    const yil = simdi.getFullYear();
+    const gunSayisi = new Date(yil, ay, 0).getDate();
+    const yilAy = `${yil}-${String(ay).padStart(2, '0')}`;
+    const ayAdi = simdi.toLocaleString('tr-TR', { month: 'long' }).toUpperCase();
+    const validCodes = ['A', 'B', 'A1', 'B1', 'H', 'R', 'Ü', 'S', 'D', 'Ö', 'E'];
+
+    const pazarGunleri = [];
+    for (let i = 1; i <= gunSayisi; i++) {
+        if (new Date(yil, ay - 1, i).getDay() === 0) pazarGunleri.push(i);
+    }
+
+    let users = {};
+    let canEdit = false;
+    let personelSiralamasi = [];
+
+async function initPage() {
+    const amirSnap = await get(ref(db, 'settings/cizelgeAmiri'));
+    const currentAmirID = amirSnap.val() || "";
+    const siteSnap = await get(ref(db, 'settings/siteName'));
+    const siralamSnap = await get(ref(db, 'settings/personelSiralamasi'));
+    personelSiralamasi = siralamSnap.val() || [];
+
+    document.getElementById('prjName').innerText = siteSnap.val() || "PROJE ADI";
+    document.getElementById('prjPeriod').innerText = ayAdi;
+    document.getElementById('headerMonthYear').innerText = `${ayAdi} / ${yil}`;
+
+    // currentUser null olsa bile sayfanın patlamasını önle
+canEdit = currentUser && (currentUser.username === currentAmirID);
+
+    const headerRow = document.getElementById('tableHeader');
+    const totalCol = headerRow.lastElementChild;
+    for(let i=1; i<=gunSayisi; i++) {
+        const th = document.createElement('th'); 
+        th.className='col-day'; 
+        th.innerText=i;
+        if (pazarGunleri.includes(i)) th.classList.add('is-sunday'); 
+        headerRow.insertBefore(th, totalCol);
+    }
+
+    const ayDataSnap = await get(ref(db, `devamCizelgesi/${yilAy}`));
+    const ayData = ayDataSnap.val() || {};
+    const personelRecords = ayData.personelKayitlari || {};
+    const extraRecords = ayData.ekstraVeriler || {};
+
+    const uSnap = await get(ref(db, 'users'));
+    users = uSnap.val() || {};
+    const tbody = document.getElementById('tableBody');
+    const userSelect = document.getElementById('userSelect');
+    
+    // Sıralamayı Uygula
+    let sortedUids = Object.keys(users).filter(uid => users[uid].type === 'security');
+    if (personelSiralamasi.length > 0) {
+        sortedUids.sort((a, b) => {
+            return personelSiralamasi.indexOf(a) - personelSiralamasi.indexOf(b);
+        });
+    }
+
+// ... (sortedUids.forEach başlangıcı)
+let counter = 1;
+sortedUids.forEach(uid => {
+    const u = users[uid];
+    if((u.name || uid).toUpperCase() === 'DESTEK PERSONEL') return;
+
+    // --- YENİ AKILLI FİLTRELEME MANTIĞI ---
+    const isPasif = (u.isActive === false);
+    const personelData = personelRecords[uid] || {};
+    
+    // Personelin bu ay herhangi bir verisi var mı? (Günler veya resmi mesai)
+    const hasData = Object.keys(personelData).length > 0;
+
+    // EĞER personel pasifse VE bu aya ait hiçbir verisi yoksa: LİSTEYE EKLEME VE ATLA
+    if (isPasif && !hasData) {
+        return; 
+    }
+    // -------------------------------------
+
+    const opt = document.createElement('option'); 
+    opt.value = uid; 
+    opt.innerText = u.name || uid;
+    userSelect.appendChild(opt);
+
+    const tr = document.createElement('tr');
+    
+    // Satır sınıfını belirle
+    let rowClass = canEdit ? 'active-row' : 'locked-row';
+    if (isPasif) rowClass += ' cancelled-row'; 
+    tr.className = rowClass;
+    
+    let days = '';
+    for(let i=1; i<=gunSayisi; i++) {
+        const val = (personelData[i]) ? personelData[i] : '';
+        
+        // Amir sadece pasif personelin BOŞ hücresine yazabilir mantığı korunuyor
+        let isInputDisabled = !canEdit; 
+        if (isPasif) {
+            if (!canEdit || val !== '') { 
+                isInputDisabled = true; 
+            } else {
+                isInputDisabled = false; 
+            }
+        }
+
+        days += `<td>
+                    <div style="position:relative; width:100%; height:100%;">
+                        <input type="text" maxlength="2" class="day-input" 
+                               data-day="${i}" data-uid="${uid}" 
+                               value="${val}" ${isInputDisabled ? 'disabled' : ''}>
+                        <div class="line-overlay"></div>
+                    </div>
+                </td>`;
+    }
+    
+    const resmiMesaiVal = personelData.resmiMesai || '';
+
+    tr.innerHTML = `<td class="col-sno">${counter++}</td>
+                <td class="sticky-col col-name" data-uid="${uid}">${u.name || uid}</td>
+                <td class="col-phone">${u.phone || '-'}</td>
+                ${days}
+                <td><input type="text" class="resmi-mesai-input" data-uid="${uid}" value="${resmiMesaiVal}" ${!canEdit ? 'disabled' : ''}></td>`;
+    tbody.appendChild(tr);
+});
+
+
+    // ALT TABLOLAR
+    document.querySelectorAll('[data-extra]').forEach(input => {
+        const key = input.dataset.extra;
+        if (extraRecords[key]) input.value = extraRecords[key];
+        if (!canEdit) {
+            input.disabled = true;
+            input.parentElement.style.background = "#f2f2f2";
+        }
+        input.addEventListener('change', async (e) => {
+            if (canEdit) await set(ref(db, `devamCizelgesi/${yilAy}/ekstraVeriler/${key}`), e.target.value);
+        });
+    });
+
+    setupDayInputs();
+    setupTimeMasks();
+    setupAmirLogic();
+	setupResmiMesaiInputs();
+}
+
+function setupDayInputs() {
+    document.querySelectorAll('.day-input').forEach(input => {
+        input.addEventListener('change', async function() {
+            const val = this.value.toUpperCase(); 
+            this.value = val;
+            
+            // CSS'in anlık tepki vermesi için HTML value attribute'unu güncelle
+            this.setAttribute('value', val); 
+
+            if (val !== '' && !validCodes.includes(val)) { 
+                this.value = ''; 
+                this.setAttribute('value', ''); 
+                return; 
+            }
+            await set(ref(db, `devamCizelgesi/${yilAy}/personelKayitlari/${this.dataset.uid}/${this.dataset.day}`), val);
+        });
+    });
+}
+function setupResmiMesaiInputs() {
+    document.querySelectorAll('.resmi-mesai-input').forEach(input => {
+        input.addEventListener('change', async function() {
+            const val = this.value;
+            const uid = this.dataset.uid;
+            // Firebase'e kaydetme işlemi
+            await set(ref(db, `devamCizelgesi/${yilAy}/personelKayitlari/${uid}/resmiMesai`), val);
+        });
+    });
+}
+ function setupTimeMasks() {
+    document.querySelectorAll('.time-mask').forEach(input => {
+        input.addEventListener('keydown', function(e) {
+            if (e.key === "Backspace" || e.key === "Delete") {
+                if (this.value.length > 0) {
+                    this.value = "";
+                    this.dispatchEvent(new Event('change'));
+                    e.preventDefault();
+                }
+            }
+        });
+        input.addEventListener('input', function() {
+            let v = this.value.replace(/\D/g, '');
+            if (v.length >= 2) v = v.substring(0, 2) + ':' + v.substring(2, 4);
+            this.value = v.substring(0, 5);
+        });
+    });
+}
+
+// --- AMİR MANTIĞI VE SIRALAMA ---
+function setupAmirLogic() {
+    let clickCount = 0;
+    let clickTimer;
+    const modal = document.getElementById('amirModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalContent = document.getElementById('modalContent');
+    const trigger = document.getElementById('secretTrigger');
+
+    // Tablo başlığına tıklandığında (Eski özellik)
+    trigger.addEventListener('click', () => {
+        clickCount++;
+        if (clickCount === 1) {
+            clickTimer = setTimeout(() => { clickCount = 0; }, 500);
+        } else if (clickCount === 3) {
+            clearTimeout(clickTimer);
+            clickCount = 0;
+            if (canEdit) {
+                openOrderModal();
+            } else {
+                // Amir değilse eski modal
+                modalTitle.innerText = "Yetkili Seçimi";
+                modalContent.innerHTML = '<select id="userSelect" style="width:100%; padding:10px; margin-bottom:10px;"></select><button id="setAmirBtn" style="width:100%; background:#000; color:#fff; margin-bottom:5px; padding:10px;">YETKİ VER</button>';
+                modal.style.display = 'block';
+            }
+        }
+    });
+
+    // İsim üstüne 3 kere tıklandığında (Yeni özellik)
+    document.querySelectorAll('.col-name').forEach(td => {
+        td.addEventListener('click', function() {
+            if (!canEdit) return;
+            const uid = this.dataset.uid;
+            if (uid === currentUser.username) {
+                openOrderModal();
+            }
+        });
+    });
+    
+    // Yetki ver butonu için (Eski modal için)
+    document.addEventListener('click', (e) => {
+        if (e.target.id === 'setAmirBtn') {
+            set(ref(db, 'settings/cizelgeAmiri'), document.getElementById('userSelect').value);
+            modal.style.display = 'none';
+        }
+    });
+}
+
+function openOrderModal() {
+    const modal = document.getElementById('amirModal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalContent = document.getElementById('modalContent');
+    
+    modalTitle.innerText = "Personel Sıralamasını Düzenle";
+    
+    // Modal içeriğini ve Kaydet butonunu baştan temiz bir şekilde oluşturuyoruz
+    modalContent.innerHTML = `
+        <p style="font-size:12px; color:#666; margin-bottom:10px;">İsimleri ☰ simgesinden tutarak sürükleyin.</p>
+        <ul id="sortableList" style="list-style:none; padding:0; margin:0; max-height:350px; overflow-y:auto; border:1px solid #ddd; border-radius:4px;"></ul>
+        <button id="saveOrderBtn" style="width:100%; background:#27ae60; color:#fff; padding:12px; border:none; border-radius:5px; font-weight:bold; cursor:pointer; margin-top:15px; font-size:14px;">
+            KAYDET VE GÜNCELLE
+        </button>
+    `;
+    
+    const list = document.getElementById('sortableList');
+
+    // Önce o ayın verilerini çekiyoruz (Kimin verisi var kontrolü için)
+    get(ref(db, `devamCizelgesi/${yilAy}/personelKayitlari`)).then(snap => {
+        const personelRecords = snap.val() || {};
+        
+        // Güvenlik personellerini filtrele
+        let sortedUids = Object.keys(users).filter(uid => users[uid].type === 'security');
+
+        // Mevcut sıralama varsa uygula
+        if (personelSiralamasi.length > 0) {
+            sortedUids.sort((a, b) => {
+                const indexA = personelSiralamasi.indexOf(a);
+                const indexB = personelSiralamasi.indexOf(b);
+                return (indexA === -1 ? 999 : indexA) - (indexB === -1 ? 999 : indexB);
+            });
+        }
+
+        // Listeyi doldur
+        sortedUids.forEach(uid => {
+            const u = users[uid];
+            if((u.name || uid).toUpperCase() === 'DESTEK PERSONEL') return;
+
+            // --- AKILLI FİLTRELEME ---
+            const isPasif = (u.isActive === false);
+            const hasData = personelRecords[uid] && Object.keys(personelRecords[uid]).length > 0;
+
+            // Eğer personel pasifse VE bu ay hiç verisi yoksa listede GÖSTERME
+            if (isPasif && !hasData) return;
+            // ------------------------
+
+            const li = document.createElement('li');
+            li.dataset.uid = uid;
+            li.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:12px; border-bottom:1px solid #eee; background:#fff;";
+            li.innerHTML = `
+                <span style="font-size:13px; font-weight:600;">${u.name || uid}</span>
+                <span class="drag-handle" style="cursor:grab; font-size:20px; color:#aaa; padding-left:10px;">☰</span>
+            `;
+            list.appendChild(li);
+        });
+
+        // SortableJS başlat
+        new Sortable(list, { 
+            animation: 150, 
+            handle: '.drag-handle',
+            ghostClass: 'sortable-ghost' 
+        });
+
+        // Kaydet butonu işlevini burada bağlıyoruz (Liste oluştuktan sonra)
+        document.getElementById('saveOrderBtn').onclick = async () => {
+            const visibleOrder = [];
+            list.querySelectorAll('li').forEach(li => visibleOrder.push(li.dataset.uid));
+            
+            // Görünmeyen (pasif/eski) personelleri kaybetmemek için mevcut sıralamayla birleştir
+            const finalOrder = [...visibleOrder];
+            personelSiralamasi.forEach(uid => {
+                if (!finalOrder.includes(uid)) finalOrder.push(uid);
+            });
+            
+            try {
+                await set(ref(db, 'settings/personelSiralamasi'), finalOrder);
+                alert("Sıralama başarıyla güncellendi!");
+                location.reload();
+            } catch (error) {
+                alert("Hata: Veri kaydedilemedi!");
+            }
+        };
+    });
+
+    modal.style.display = 'block';
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CGA Saha Rehber - V3 PRO</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        :root { --primary: #D7F09D; --bg: #121212; --card: #1E1E1E; --star: #FFD700; --error: #ff4d4d; }
+        body { background: var(--bg); color: #fff; font-family: sans-serif; margin: 0; padding: 15px; padding-bottom: 80px; overflow-x: hidden; }
+        
+        /* MODAL STYLE */
+        #customModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); z-index: 9999; align-items: center; justify-content: center; backdrop-filter: blur(5px); }
+        .modal-content { background: var(--card); border: 2px solid var(--error); border-radius: 20px; width: 85%; max-width: 400px; padding: 25px; text-align: center; box-shadow: 0 0 30px rgba(255, 77, 77, 0.2); animation: popIn 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55); }
+        @keyframes popIn { from { transform: scale(0.5); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        .modal-btn { background: var(--error); color: #fff; border: none; padding: 12px 30px; border-radius: 8px; margin-top: 20px; font-weight: bold; cursor: pointer; width: 100%; }
+        .modal-footer { display: flex; gap: 10px; margin-top: 20px; }
+        .btn-modal-confirm { background: var(--error); color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; flex: 1; }
+        .btn-modal-cancel { background: #444; color: #fff; border: none; padding: 12px; border-radius: 8px; font-weight: bold; cursor: pointer; flex: 1; }
+
+        .admin-card { background: var(--card); padding: 15px; border-radius: 15px; border: 1px solid rgba(215,240,157,0.1); margin-bottom: 15px; position: relative; }
+        input, textarea { width: 100%; padding: 12px; background: #000; border: 1px solid #333; color: #fff; border-radius: 8px; outline: none; margin-bottom: 8px; box-sizing: border-box; font-size: 14px; }
+        input:focus { border-color: var(--primary); }
+        
+        .btn-save { width: 100%; padding: 15px; background: var(--primary); color: #000; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 14px; }
+        .btn-cancel { background: none; color: #888; border: none; width: 100%; margin-top: 10px; font-size: 12px; cursor: pointer; }
+        
+        .vip-selector { display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.3); padding: 12px 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid rgba(255,215,0,0.1); cursor: pointer; }
+        .vip-info { display: flex; align-items: center; gap: 8px; color: var(--star); font-weight: bold; font-size: 13px; }
+
+        .switch { position: relative; display: inline-block; width: 44px; height: 22px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #333; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: var(--star); }
+        input:checked + .slider:before { transform: translateX(22px); }
+
+        .search-row { position: sticky; top: 0; z-index: 100; background: var(--bg); padding: 10px 0; }
+        .search-box { background: var(--card); border: 2px solid var(--primary); border-radius: 12px; display: flex; align-items: center; padding: 5px 15px; }
+        .search-box input { border: none; margin: 0; background: transparent; }
+
+        .sakin-item { background: var(--card); padding: 15px; border-radius: 12px; margin-bottom: 10px; border-left: 4px solid transparent; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .vip-item { border-left-color: var(--star); background: linear-gradient(90deg, rgba(255,215,0,0.05), transparent); }
+        .sakin-header { display: flex; justify-content: space-between; align-items: flex-start; }
+        .sakin-name { font-weight: bold; display: flex; align-items: center; gap: 5px; text-transform: uppercase; font-size: 14px; }
+        
+        .actions { display: flex; gap: 15px; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 12px; }
+        .action-btn { background: none; border: none; color: #888; font-size: 12px; display: flex; align-items: center; gap: 4px; cursor: pointer; }
+        #statusInfo { font-size: 10px; color: #555; text-align: center; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+
+    <div id="customModal">
+        <div class="modal-content" id="modalContent">
+            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--error);">warning</span>
+            <h3 id="modalTitle" style="margin: 10px 0;">SİSTEM UYARISI</h3>
+            <p id="modalMsg" style="color: #ccc; font-size: 14px; line-height: 1.5;"></p>
+            <div id="modalButtons">
+                <button class="modal-btn" onclick="closeModal()">ANLADIM</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="statusInfo">Sistem Kontrol Ediliyor...</div>
+
+    <div class="admin-card" id="formPanel">
+        <h2 id="panelTitle" style="color:var(--primary); font-size:12px; margin-top:0; margin-bottom:10px;">YENİ KAYIT EKLE</h2>
+        <input type="hidden" id="editKey"><input type="hidden" id="oldVipStatus"> 
+        <input type="text" id="adSoyad" placeholder="İsim / Kurum Adı">
+        <div style="display:flex; gap:5px;">
+            <input type="text" id="daireNo" placeholder="Daire (A12)">
+            <input type="tel" id="telefon" placeholder="Telefon" inputmode="tel">
+        </div>
+        <textarea id="not" placeholder="Notlar..." rows="1"></textarea>
+        <div class="vip-selector" onclick="const i = document.getElementById('isVip'); i.checked = !i.checked;">
+            <div class="vip-info"><span class="material-symbols-outlined">grade</span> VIP OLARAK İŞARETLE</div>
+            <label class="switch" onclick="event.stopPropagation()"><input type="checkbox" id="isVip"><span class="slider"></span></label>
+        </div>
+        <button class="btn-save" onclick="handleAction()" id="submitBtn">KAYDET</button>
+        <button class="btn-cancel" id="cancelBtn" onclick="resetForm()" style="display:none;">VAZGEÇ</button>
+    </div>
+
+    <div class="search-row">
+        <div class="search-box">
+            <span class="material-symbols-outlined" style="color:var(--primary)">search</span>
+            <input type="text" id="searchInput" placeholder="Hızlı Ara (Örn: A12 veya 12)" oninput="fastSearch()">
+        </div>
+    </div>
+
+    <div id="sakinListesi"></div>
+
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getDatabase, ref, push, set, get, remove, update } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+
+    // --- REHBERDEKİ AYNI GÜVENLİK AYARLARI ---
+    const SECURITY_CONFIG = {
+        KEY: "KOLART_SİSTEM_2026_CGA", 
+        PATH_VIP: "DP_VIP",
+        PATH_NORMAL: "DP_NORMAL",
+        PATH_TIME: "SYSTEM_CONTROL/lastUpdate"
+    };
+
+    const SECRET_KEY = SECURITY_CONFIG.KEY; // Eski fonksiyonlarla uyum için
+
+    // Şifre Çözücü (Rehberdekiyle aynı, hata payı yok)
+    const decryptAES = (data) => {
+        if(!data) return null;
+        try {
+            const bytes = CryptoJS.AES.decrypt(data, SECRET_KEY);
+            const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+            return decrypted ? JSON.parse(decrypted) : null;
+        } catch (e) { return null; }
+    };
+
+    const encryptAES = (data) => {
+        return CryptoJS.AES.encrypt(JSON.stringify(data), SECRET_KEY).toString();
+    };
+
+    // --- SİSTEM BAŞLATMA (KOVMAYAN VE SİLMEYEN MANTIK) ---
+    const encryptedConfig = localStorage.getItem("siteConfig");
+    let siteConfig = decryptAES(encryptedConfig);
+
+    // Eğer şifreli değilse düz oku (Eski veriyi kurtar)
+    if (!siteConfig && encryptedConfig) {
+        try { siteConfig = JSON.parse(encryptedConfig); } catch(e) { siteConfig = null; }
+    }
+
+    // Config yoksa index'e at ama ASLA LOCALİ SİLME
+    if (!siteConfig) {
+        window.location.href = "index.html";
+    }
+
+    const app = initializeApp(siteConfig);
+    const db = getDatabase(app);
+
+    const PATH_VIP = SECURITY_CONFIG.PATH_VIP;
+    const PATH_NORMAL = SECURITY_CONFIG.PATH_NORMAL;
+    const PATH_TIME = SECURITY_CONFIG.PATH_TIME;
+
+    let activeData = [];
+
+    // --- MODAL & UI FONKSİYONLARI ---
+    window.showAlert = (msg) => {
+        document.getElementById('modalMsg').innerText = msg;
+        document.getElementById('modalButtons').innerHTML = `<button class="modal-btn" onclick="closeModal()">ANLADIM</button>`;
+        document.getElementById('customModal').style.display = 'flex';
+    };
+    
+    window.closeModal = () => { document.getElementById('customModal').style.display = 'none'; };
+
+    window.confirmDelete = (key, isVipStatus) => {
+        document.getElementById('modalMsg').innerText = "Bu kayıt kalıcı olarak silinecektir. Onaylıyor musunuz?";
+        document.getElementById('modalButtons').innerHTML = `
+            <div class="modal-footer">
+                <button class="btn-modal-cancel" onclick="closeModal()">VAZGEÇ</button>
+                <button class="btn-modal-confirm" id="confirmDeleteBtn">SİL</button>
+            </div>
+        `;
+        document.getElementById('customModal').style.display = 'flex';
+        document.getElementById('confirmDeleteBtn').onclick = () => { deleteSakin(key, isVipStatus); };
+    };
+
+    // --- VERİ YÖNETİMİ ---
+    async function init() {
+        const status = document.getElementById('statusInfo');
+        try {
+            const timeSnap = await get(ref(db, PATH_TIME));
+            const serverTime = timeSnap.exists() ? timeSnap.val() : 0;
+            const localTime = localStorage.getItem("lastSyncTime") || 0;
+            
+            if (serverTime == localTime && localStorage.getItem("enc_data")) {
+                status.innerText = "⚡ Senkronize: Yerel Veri";
+                decryptAndLoad();
+            } else { 
+                status.innerText = "🔄 Veriler Güncelleniyor...";
+                await downloadAndEncrypt(serverTime); 
+            }
+        } catch(e) { 
+            status.innerText = "⚠️ Çevrimdışı Mod"; 
+            decryptAndLoad();
+        }
+    }
+
+    async function downloadAndEncrypt(newTime) {
+        const [vSnap, nSnap] = await Promise.all([get(ref(db, PATH_VIP)), get(ref(db, PATH_NORMAL))]);
+        let all = [];
+        if(vSnap.exists()) Object.keys(vSnap.val()).forEach(k => all.push({k, ...vSnap.val()[k], v:1}));
+        if(nSnap.exists()) Object.keys(nSnap.val()).forEach(k => all.push({k, ...nSnap.val()[k], v:0}));
+        
+        localStorage.setItem("enc_data", encryptAES(all));
+        localStorage.setItem("lastSyncTime", newTime);
+        activeData = all;
+        render(activeData.filter(x => x.v === 1));
+    }
+
+    function decryptAndLoad() {
+        const encrypted = localStorage.getItem("enc_data");
+        const decrypted = decryptAES(encrypted);
+        if(decrypted) {
+            activeData = decrypted;
+            render(activeData.filter(x => x.v === 1)); 
+        }
+    }
+
+    // --- AKSİYONLAR ---
+    window.fastSearch = () => {
+        let term = document.getElementById('searchInput').value.trim().toUpperCase();
+        if(term.length < 1) { render(activeData.filter(x => x.v === 1)); return; }
+        if (term && !term.includes("-")) {
+            term = term.replace(/^([A-ZÇĞİÖŞÜ]+)(\d+)$/i, "$1-$2");
+        }
+        const filtered = activeData.filter(s => 
+            s.adSoyad.toUpperCase().includes(term) || 
+            (s.daireNo && s.daireNo.toUpperCase().includes(term))
+        );
+        render(filtered);
+    };
+
+    window.handleAction = async () => {
+        const key = document.getElementById('editKey').value;
+        const isVip = document.getElementById('isVip').checked;
+        const oldVip = document.getElementById('oldVipStatus').value;
+        const adSoyad = document.getElementById('adSoyad').value.trim().toUpperCase();
+        const telefon = document.getElementById('telefon').value.trim();
+        const not = document.getElementById('not').value.trim();
+        let daireNo = document.getElementById('daireNo').value.trim().toUpperCase();
+
+        if (daireNo && !daireNo.includes("-")) {
+            daireNo = daireNo.replace(/^([A-ZÇĞİÖŞÜ]+)(\d+)$/i, "$1-$2");
+        }
+
+        if(!adSoyad || !telefon) return showAlert("Lütfen İsim ve Telefon bilgilerini doldurun!");
+
+        const payload = { adSoyad, daireNo, telefon, not };
+        const currentPath = isVip ? PATH_VIP : PATH_NORMAL;
+
+        try {
+            if(key) {
+                const oldPath = (oldVip == "1") ? PATH_VIP : PATH_NORMAL;
+                if(oldPath !== currentPath) {
+                    await remove(ref(db, `${oldPath}/${key}`));
+                    await set(ref(db, `${currentPath}/${key}`), payload);
+                } else { await update(ref(db, `${currentPath}/${key}`), payload); }
+            } else { await push(ref(db, currentPath), payload); }
+            
+            await set(ref(db, PATH_TIME), Date.now());
+            location.reload();
+        } catch(e) { showAlert("Hata!"); }
+    };
+
+    window.editMode = (key) => {
+        const item = activeData.find(x => x.k === key);
+        if(!item) return;
+        document.getElementById('editKey').value = key;
+        document.getElementById('oldVipStatus').value = item.v;
+        document.getElementById('adSoyad').value = item.adSoyad;
+        document.getElementById('daireNo').value = item.daireNo || "";
+        document.getElementById('telefon').value = item.telefon;
+        document.getElementById('not').value = item.not || "";
+        document.getElementById('isVip').checked = item.v === 1;
+        document.getElementById('panelTitle').innerText = "KAYDI DÜZENLE";
+        document.getElementById('submitBtn').innerText = "KAYDET";
+        document.getElementById('cancelBtn').style.display = "block";
+        window.scrollTo({top: 0, behavior: 'smooth'});
+    };
+
+    window.deleteSakin = async (key, isVipStatus) => {
+        try {
+            await remove(ref(db, `${isVipStatus === 1 ? PATH_VIP : PATH_NORMAL}/${key}`));
+            await set(ref(db, PATH_TIME), Date.now());
+            location.reload();
+        } catch(e) { showAlert("Hata!"); }
+    };
+
+    function render(list) {
+        const container = document.getElementById('sakinListesi');
+        container.innerHTML = list.length === 0 ? '<div style="text-align:center; color:#444; margin-top:30px;">Kayıt Bulunamadı</div>' : '';
+        list.forEach(s => {
+            container.innerHTML += `
+                <div class="sakin-item ${s.v ? 'vip-item' : ''}">
+                    <div class="sakin-header">
+                        <div class="sakin-name">${s.v ? '⭐ ' : ''}${s.adSoyad}</div>
+                        <div style="font-size:12px; color:var(--primary); font-weight:bold;">${s.daireNo || 'K'}</div>
+                    </div>
+                    <div style="font-size:13px; color:#888; margin-top:4px;">${s.telefon}</div>
+                    ${s.not ? `<div style="font-size:11px; color:#666; background:rgba(0,0,0,0.2); padding:6px; border-radius:4px; margin-top:8px; border-left:2px solid var(--primary);">${s.not}</div>` : ''}
+                    <div class="actions">
+                        <button class="action-btn" style="color:var(--primary)" onclick="editMode('${s.k}')"><span class="material-symbols-outlined" style="font-size:18px;">edit</span></button>
+                        <button class="action-btn" style="color:var(--error)" onclick="confirmDelete('${s.k}', ${s.v})"><span class="material-symbols-outlined" style="font-size:18px;">delete</span></button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    window.resetForm = () => {
+        document.getElementById('editKey').value = ""; document.getElementById('adSoyad').value = "";
+        document.getElementById('daireNo').value = ""; document.getElementById('telefon').value = "";
+        document.getElementById('not').value = ""; document.getElementById('isVip').checked = false;
+        document.getElementById('panelTitle').innerText = "YENİ KAYIT EKLE";
+        document.getElementById('submitBtn').innerText = "SİSTEME GÖNDER";
+        document.getElementById('cancelBtn').style.display = "none";
+    };
+
+    init();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

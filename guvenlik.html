@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="tr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KOLART — Güvenlik Denetim Sistemi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --primary: #CCFF00; 
+            --on-primary: #000000;
+            --bg-dark: #080808;
+            --surface: #0C0C0C;
+            --surface-container: #161616;
+            --text-main: #ffffff;
+            --text-muted: rgba(255, 255, 255, 0.4);
+            --border: rgba(255, 255, 255, 0.05);
+            --error: #FF4D4D;
+            --success: #00E676;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: var(--bg-dark); color: var(--text-main); display: flex; justify-content: center; overflow-x: hidden; }
+
+        .app-container {
+            width: 100%; max-width: 390px; background-color: var(--surface);
+            min-height: 100vh; display: flex; flex-direction: column;
+            border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+            position: relative;
+        }
+
+        header {
+            padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1); background: var(--surface);
+            position: sticky; top: 0; z-index: 100;
+        }
+        
+        .logo-area { display: flex; align-items: center; gap: 6px; }
+        .logo-text { font-weight: 900; letter-spacing: 1.5px; font-size: 16px; color: #fff; }
+
+        .terminal-id { 
+            font-family: monospace; font-size: 8.5px; font-weight: 900; text-transform: uppercase; 
+            display: flex; align-items: center; gap: 6px; 
+        }
+        .terminal-id div { display: flex; align-items: center; }
+        .terminal-id span { color: #fff; }
+        .terminal-id .highlight { color: var(--primary); } 
+
+        main { flex: 1; overflow-y: auto; padding: 20px 16px 120px 16px; }
+
+        .status-card {
+            background-color: var(--primary); border-radius: 32px; padding: 24px 28px;
+            color: var(--on-primary); position: relative; overflow: hidden; margin-bottom: 24px;
+            box-shadow: 0 10px 30px rgba(204, 255, 0, 0.15);
+        }
+        .status-label { font-size: 10px; font-weight: 800; opacity: 0.6; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
+        .guard-name { font-size: 24px; font-weight: 900; letter-spacing: -1px; text-transform: uppercase; line-height: 1.1; }
+        
+        .info-row { display: flex; justify-content: space-between; margin-top: 30px; align-items: flex-end; gap: 15px; }
+        .site-info-wrapper { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+        .site-name-inline { font-weight: 800; font-size: 14px; text-transform: uppercase; display: flex; align-items: center; gap: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .nobet-timer { font-family: monospace; font-size: 20px; font-weight: 700; letter-spacing: -0.5px; line-height: 1; }
+
+        .card-footer {
+            margin-top: 18px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.1);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .shift-info { display: flex; align-items: center; gap: 5px; font-weight: 800; font-size: 11px; }
+
+        .section-title { font-size: 11px; font-weight: 800; color: var(--text-muted); text-transform: uppercase; margin: 24px 0 12px 4px; letter-spacing: 1.5px; }
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .action-item {
+            background: var(--surface-container); border-radius: 22px; padding: 18px;
+            display: flex; flex-direction: column; gap: 12px; text-decoration: none;
+            border: 1px solid var(--border); transition: all 0.2s; color: inherit; cursor: pointer;
+        }
+        .action-item:active { transform: scale(0.95); background: #202020; }
+        .icon-box { background: rgba(204, 255, 0, 0.1); color: var(--primary); width: 42px; height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center; }
+
+        nav {
+            position: fixed; bottom: 0; width: 100%; max-width: 390px;
+            background: rgba(12, 12, 12, 0.95); backdrop-filter: blur(20px);
+            display: flex; justify-content: space-around; padding: 12px 10px 24px 10px;
+            border-top: 1px solid var(--border); z-index: 100;
+        }
+        .nav-link { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--text-muted); text-decoration: none; font-size: 9px; font-weight: bold; position: relative; cursor: pointer; }
+        .nav-link.active { color: var(--primary); }
+
+        .badge-online { background: #000; color: var(--primary); padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 900; }
+        
+      .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(10px);
+    /* EN KRİTİK SATIR: Navigasyon barından yüksek olmalı */
+    z-index: 99999 !important; 
+    display: none;
+    justify-content: center;
+    align-items: flex-end;
+}
+
+.modal-content {
+    width: 100%;
+    max-width: 390px;
+    background: var(--surface-container);
+    /* Köşeleri biraz daha yumuşattık */
+    border-radius: 24px 24px 0 0; 
+    /* Üstten 20px boşluk bırakarak bildirimlere yer açıyoruz */
+    padding: 24px 20px 60px 20px; 
+    border-top: 2px solid var(--primary);
+    
+    /* Animasyon ve Konumlandırma */
+    transform: translateY(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* KRİTİK DÜZELTMELER */
+    max-height: 85vh; /* Ekranın en fazla %85'ini kaplasın (Üstteki Toast'lar görünsün) */
+    overflow-y: auto; /* İçerik taşarsa modal içinde kaydırılsın */
+    position: relative;
+    
+    /* iPhone'lardaki alt bar (safe area) çakışmasını önler */
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+    
+    /* Mobilde klavye açıldığında içeriğin yukarı kaymasını sağlar */
+    margin-bottom: 0;
+    box-shadow: 0 -10px 40px rgba(0,0,0,0.5);
+}
+
+/* Modal açıldığında uygulanacak sınıf */
+.modal-content.show {
+    transform: translateY(0);
+}
+        .modal-title { font-weight: 900; font-size: 18px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+        
+        .menu-btn {
+            width: 100%; padding: 18px; background: #000; border: 1px solid var(--border);
+            border-radius: 16px; color: #fff; display: flex; align-items: center; gap: 15px;
+            margin-bottom: 12px; cursor: pointer; font-weight: 700; font-size: 14px;
+        }
+        .menu-btn span:first-child { color: var(--primary); }
+
+        .form-group { margin-bottom: 15px; position: relative; }
+        .form-group label { display: block; font-size: 10px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 5px; font-weight: 800; }
+        .form-group input { 
+            width: 100%; background: #000; border: 1px solid var(--border); padding: 12px; 
+            border-radius: 12px; color: #fff; font-weight: bold;
+        }
+        
+        .pass-toggle { position: absolute; right: 12px; bottom: 10px; color: var(--text-muted); cursor: pointer; padding: 5px; }
+
+        .modal-btn {
+            width: 100%; padding: 15px; border-radius: 12px; border: none; font-weight: 900; 
+            text-transform: uppercase; cursor: pointer; margin-top: 10px;
+        }
+        .btn-primary { background: var(--primary); color: #000; }
+        .btn-secondary { background: rgba(255,255,255,0.05); color: #fff; }
+
+        /* KONUM MODAL ÖZEL STİL */
+        #locationStatusModal .modal-content { border-top: 1px solid var(--primary); text-align: center; }
+        .status-icon-box { width: 60px; height: 60px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px auto; }
+        .loading-spin { border: 3px solid rgba(204, 255, 0, 0.1); border-top: 3px solid var(--primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 15px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .msg-badge {
+            position: absolute; top: -2px; right: 8px;
+            background-color: var(--error); color: white;
+            font-size: 10px; font-weight: 900; width: 16px; height: 16px;
+            border-radius: 50%; display: none; align-items: center; justify-content: center;
+            border: 2px solid var(--surface); box-shadow: 0 0 10px rgba(255, 77, 77, 0.5);
+            animation: pulse-red 2s infinite;
+        }
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0.7); }
+            70% { box-shadow: 0 0 0 8px rgba(255, 77, 77, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 77, 77, 0); }
+        }
+        .unread-glow { color: var(--error) !important; filter: drop-shadow(0 0 5px var(--error)); }
+
+      #toast-container {
+    position: fixed; 
+    top: 20px; 
+    left: 50%; 
+    transform: translateX(-50%);
+    width: calc(100% - 40px); 
+    max-width: 350px; 
+    /* KRİTİK DEĞİŞİKLİK: Modalın (99999) üzerinde olmalı */
+    z-index: 100001; 
+    pointer-events: none;
+}
+        .toast {
+            background: #1a1a1a; border-left: 4px solid var(--primary);
+            color: #fff; padding: 16px; border-radius: 12px; margin-bottom: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); display: flex; align-items: center;
+            gap: 12px; animation: slideIn 0.3s ease forwards;
+        }
+        .toast.error { border-left-color: var(--error); }
+        .toast.success { border-left-color: var(--success); }
+        @keyframes slideIn { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideOut { to { opacity: 0; transform: translateY(-20px); } }
+    </style>
+
+<script type="module">
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { getDatabase, ref, get, onValue, set, update, push } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { getAuth, onAuthStateChanged, updatePassword } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+// --- AES ŞİFRE ÇÖZÜCÜ ---
+const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
+const decryptData = (encrypted) => {
+    try {
+        const bytes = CryptoJS.AES.decrypt(encrypted, CONFIG_KEY);
+        const dec = bytes.toString(CryptoJS.enc.Utf8);
+        return dec ? JSON.parse(dec) : null;
+    } catch (e) { return null; }
+};
+let currentUser = JSON.parse(sessionStorage.getItem('currentUser'));
+const siteID = localStorage.getItem("siteID");
+const siteConfigStr = localStorage.getItem("siteConfig");
+const siteConfig = decryptData(siteConfigStr); // Şifreli veriyi çözüyoruz
+
+// Eğer kullanıcı yoksa veya şifre çözülemezse (müdahale varsa) şutla
+if (!currentUser || !siteID || !siteConfigStr || !siteConfig) { 
+    window.location.href = "index.html"; 
+}
+let app = getApps().find(a => a.name === `siteApp-${siteID}`) || initializeApp(siteConfig, `siteApp-${siteID}`);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+
+onAuthStateChanged(auth, (user) => {
+    if (!user) {
+        window.location.href = "index.html";
+    } else {
+        loadSiteName(); 
+        trackActiveNobet(); 
+        trackMessages();
+        trackAmirYetki(); 
+        trackEmergencyNumbers(); // Dinamik numaraları burada başlatıyoruz
+    }
+});
+
+// SiteID ile benzersiz bir merkez bağlantısı kuruyoruz
+const merkezApp = getApps().find(a => a.name === `merkez-${siteID}`) || initializeApp(siteConfig, `merkez-${siteID}`);
+const merkezDb = getDatabase(merkezApp);
+
+const emergencyConfig = {
+    apiKey: "AIzaSyDNPV7NAlCHAWfWSlqkG8Lox09uSIePD7s",
+    authDomain: "cankayaevleri-1bbbd.firebaseapp.com",
+    databaseURL: "https://cankayaevleri-1bbbd-default-rtdb.firebaseio.com",
+    projectId: "cankayaevleri-1bbbd",
+    storageBucket: "cankayaevleri-1bbbd.firebasestorage.app",
+    messagingSenderId: "281018906216",
+    appId: "1:281018906216:web:b4ab20bf5381d00f5eeddd",
+    measurementId: "G-RCWQ2C9SH3"
+};
+
+const emergencyApp = getApps().find(a => a.name === "emergencyApp") || initializeApp(emergencyConfig, "emergencyApp");
+const emergencyDb = getDatabase(emergencyApp);
+
+let nobetTimerInterval = null;
+let isNobetActive = false; 
+
+window.showToast = (msg, type = 'primary') => {
+    const container = document.getElementById('toast-container');
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    const icon = type === 'error' ? 'report' : (type === 'success' ? 'check_circle' : 'info');
+    toast.innerHTML = `<span class="material-symbols-outlined">${icon}</span><span style="font-size:13px; font-weight:600;">${msg}</span>`;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = 'slideOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+async function loadSiteName() {
+    const siteNameEl = document.getElementById('site-name-display');
+    try {
+        const snap = await get(ref(db, "settings/siteName"));
+        siteNameEl.textContent = snap.exists() ? String(snap.val()).toUpperCase() : "TANIMSIZ SİTE";
+    } catch (e) { siteNameEl.textContent = "HATA"; }
+}
+
+function startNobetCounter(startTimeStr) {
+    const startTime = new Date(startTimeStr);
+    if(nobetTimerInterval) clearInterval(nobetTimerInterval);
+    nobetTimerInterval = setInterval(() => {
+        const now = new Date();
+        const diff = Math.floor((now - startTime) / 1000); 
+        const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+        const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+        const s = String(diff % 60).padStart(2, '0');
+        document.getElementById("nobetTimer").innerText = `${h}:${m}:${s}`;
+    }, 1000);
+}
+
+function trackActiveNobet() {
+    const nobetAlArea = document.getElementById('nobet-al-area');
+    const nobetTeslimArea = document.getElementById('nobet-teslim-area');
+    const sIcon = document.getElementById('shift-icon');
+    const sText = document.getElementById('shift-text');
+
+    onValue(ref(db, "nobetRecords"), (snapshot) => {
+        let activeRecord = null;
+        if (snapshot.exists()) {
+            activeRecord = Object.values(snapshot.val()).find(r => 
+                (r.startBy === (currentUser.name || currentUser.username)) && r.status === "started"
+            );
+        }
+
+        if (activeRecord) {
+            isNobetActive = true;
+            if (typeof startNobetCounter === "function") startNobetCounter(activeRecord.startTime);
+            nobetAlArea.style.display = 'none';
+            nobetTeslimArea.style.display = 'flex';
+            const shiftVal = activeRecord.shift ? activeRecord.shift.toLowerCase() : "";
+            if (shiftVal === "gece") {
+                sIcon.innerText = "dark_mode";
+                sText.innerText = "Gece Vardiyası";
+            } else if (shiftVal === "gündüz") {
+                sIcon.innerText = "light_mode";
+                sText.innerText = "Gündüz Vardiyası";
+            } else {
+                sIcon.innerText = "history";
+                sText.innerText = activeRecord.shift || "Belirsiz";
+            }
+        } else {
+            isNobetActive = false;
+            if(nobetTimerInterval) clearInterval(nobetTimerInterval);
+            const timerEl = document.getElementById("nobetTimer");
+            if(timerEl) timerEl.innerText = "00:00:00";
+            nobetAlArea.style.display = 'flex';
+            nobetTeslimArea.style.display = 'none';
+            sIcon.innerText = "history";
+            sText.innerText = "Nöbet Bekleniyor";
+        }
+    });
+}
+
+function trackMessages() {
+    const userUID = currentUser.username; 
+    const userMsgsRef = ref(db, `user_messages/${userUID}`);
+    const badge = document.getElementById("msgBadge");
+    const icon = document.getElementById("talimat-icon");
+    onValue(userMsgsRef, (snapshot) => {
+        const data = snapshot.val();
+        let unreadCount = 0;
+        if (data) {
+            Object.values(data).forEach(msg => {
+                if (msg.is_read === false) unreadCount++;
+            });
+        }
+        if (unreadCount > 0) {
+            badge.innerText = unreadCount > 9 ? "9+" : unreadCount;
+            badge.style.display = "flex";
+            icon.classList.add("unread-glow");
+        } else {
+            badge.style.display = "none";
+            icon.classList.remove("unread-glow");
+        }
+    });
+}
+function trackAmirYetki() {
+    const araKayitBtn = document.getElementById('araKayitButonAlani');
+    const settingsRef = ref(db, "settings");
+
+    onValue(settingsRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const settings = snapshot.val();
+            const amirUser = settings.cizelgeAmiri; 
+            const araKayitGuv = settings.araKayit ? settings.araKayit.guvenlik : false;
+            
+            // Giriş yapan kullanıcının adını temizle ve büyüt
+            const aktifKullaniciAd = (currentUser.name || currentUser.username || "").trim().toUpperCase();
+            const amirAd = (amirUser || "").trim().toUpperCase();
+
+            // ŞART: Güvenlik TRUE ve İsimler EŞİTSE göster
+            if (araKayitGuv === true && aktifKullaniciAd === amirAd) {
+                araKayitBtn.style.display = 'flex';
+            } else {
+                araKayitBtn.style.display = 'none';
+            }
+        }
+    });
+}
+window.toggleProfileMenu = (show) => {
+    const modal = document.getElementById('profileMenuModal');
+    const content = modal.querySelector('.modal-content');
+    if(show) {
+        modal.style.display = 'flex';
+        setTimeout(() => content.classList.add('show'), 10);
+    } else {
+        content.classList.remove('show');
+        setTimeout(() => modal.style.display = 'none', 300);
+    }
+}
+
+window.openSettings = async () => {
+    toggleProfileMenu(false);
+    const modal = document.getElementById('settingsModal');
+    const content = modal.querySelector('.modal-content');
+    const phoneInput = document.getElementById('newPhone');
+    modal.style.display = 'flex';
+    setTimeout(() => content.classList.add('show'), 10);
+    document.getElementById('profName').value = currentUser.name || currentUser.username;
+    phoneInput.value = "Yükleniyor..."; 
+    try {
+        const userRef = ref(db, `users/${currentUser.username}`);
+        const snap = await get(userRef);
+        if (snap.exists() && snap.val().phone) {
+            phoneInput.value = snap.val().phone; 
+        } else {
+            phoneInput.value = "";
+            phoneInput.placeholder = "Numara kayıtlı değil!";
+        }
+    } catch (e) { phoneInput.value = ""; }
+}
+
+window.closeSettings = () => {
+    const modal = document.getElementById('settingsModal');
+    modal.querySelector('.modal-content').classList.remove('show');
+    setTimeout(() => modal.style.display = 'none', 300);
+}
+
+window.togglePassword = () => {
+    const passInput = document.getElementById('newPass');
+    const icon = document.getElementById('passIcon');
+    if (passInput.type === "password") {
+        passInput.type = "text"; icon.innerText = "visibility_off";
+    } else {
+        passInput.type = "password"; icon.innerText = "visibility";
+    }
+}
+
+// --- SADECE SAYI VE 6-15 HANE KONTROLÜ ---
+window.handlePassInput = (e) => {
+    // Sayı dışındaki her şeyi siler, 15 haneden sonrasını keser
+    let val = e.target.value.replace(/\D/g, "").substring(0, 15);
+    e.target.value = val;
+
+    const updateReq = (id, isOk) => {
+        const el = document.getElementById(id);
+        if(!el) return;
+        const icon = el.querySelector('span');
+        if (isOk) {
+            icon.innerText = "check_circle";
+            icon.style.color = "#d7f09d"; 
+            el.style.color = "#d7f09d";
+        } else {
+            icon.innerText = "cancel";
+            icon.style.color = "#ff4d4d"; 
+            el.style.color = "#ccc";
+        }
+    };
+
+    updateReq("req-length", val.length >= 6 && val.length <= 15);
+    updateReq("req-only-num", val.length > 0);
+}
+
+window.updateProfile = async () => {
+    const newPass = document.getElementById('newPass').value;
+    const newPhone = document.getElementById('newPhone').value;
+
+    if (newPass) {
+        if (newPass.length < 6 || newPass.length > 15) {
+            return window.showToast("Şifre 6-15 hane arasında olmalıdır!", "error");
+        }
+    }
+    
+    if(!newPhone) return window.showToast("Telefon numarası gereklidir.", "error");
+
+    try {
+        const userRef = ref(db, `users/${currentUser.username}`);
+        const updateData = { phone: newPhone };
+        if(newPass) updateData.password = newPass;
+        await update(userRef, updateData);
+        if(newPass) {
+            const user = auth.currentUser;
+            if (user) {
+                try {
+                    await updatePassword(user, newPass);
+                } catch (authError) {
+                    if (authError.code === 'auth/requires-recent-login') {
+                        window.showToast("Güvenlik hatası: Lütfen çıkış yapıp tekrar girin.", "error");
+                        return; 
+                    }
+                    throw authError;
+                }
+            }
+        }
+        window.showToast("Bilgiler güncellendi.", "success");
+        currentUser.phone = newPhone;
+        sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+        setTimeout(closeSettings, 1500);
+    } catch (e) {
+        window.showToast("Güncelleme başarısız.", "error");
+    }
+}
+
+window.sendLiveLocation = () => {
+    toggleProfileMenu(false);
+    const statusModal = document.getElementById('locationStatusModal');
+    const statusContent = statusModal.querySelector('.modal-content');
+    const statusTitle = document.getElementById('locStatusTitle');
+    const statusDesc = document.getElementById('locStatusDesc');
+    const statusIconArea = document.getElementById('locStatusIconArea');
+    const closeBtn = document.getElementById('locModalCloseBtn');
+
+    statusModal.style.display = 'flex';
+    setTimeout(() => statusContent.classList.add('show'), 10);
+    statusIconArea.innerHTML = '<div class="loading-spin"></div>';
+    statusTitle.innerText = "KONUM ALINIYOR...";
+    statusDesc.innerText = "Lütfen bekleyin, GPS verisi doğrulanıyor.";
+    closeBtn.style.display = "none";
+
+    if (!navigator.geolocation) {
+        updateLocModal("HATA", "Cihazınızda GPS desteği bulunamadı.", "error");
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(async (pos) => {
+        try {
+            const locRef = ref(db, `testkordinat/${currentUser.username}`);
+            await set(locRef, {
+                name: currentUser.name || currentUser.username,
+                lat: pos.coords.latitude, lng: pos.coords.longitude,
+                time: new Date().toLocaleString('tr-TR')
+            });
+            updateLocModal("BAŞARILI", "Konumunuz merkeze başarıyla iletildi.", "success");
+        } catch (err) {
+            updateLocModal("HATA", "Merkez sunucusuna bağlanılamadı.", "error");
+        }
+    }, (err) => {
+        let msg = "Konum izni reddedildi.";
+        updateLocModal("HATA", msg, "error");
+    }, { enableHighAccuracy: true, timeout: 10000 });
+}
+
+function updateLocModal(title, desc, type) {
+    const statusTitle = document.getElementById('locStatusTitle');
+    const statusDesc = document.getElementById('locStatusDesc');
+    const statusIconArea = document.getElementById('locStatusIconArea');
+    const closeBtn = document.getElementById('locModalCloseBtn');
+    statusTitle.innerText = title;
+    statusDesc.innerText = desc;
+    closeBtn.style.display = "block";
+    if(type === "success") {
+        statusTitle.style.color = "var(--success)";
+        statusIconArea.innerHTML = '<span class="material-symbols-outlined" style="font-size:48px; color:var(--success)">check_circle</span>';
+    } else {
+        statusTitle.style.color = "var(--error)";
+        statusIconArea.innerHTML = '<span class="material-symbols-outlined" style="font-size:48px; color:var(--error)">error</span>';
+    }
+}
+
+window.closeLocModal = () => {
+    const modal = document.getElementById('locationStatusModal');
+    modal.querySelector('.modal-content').classList.remove('show');
+    setTimeout(() => modal.style.display = 'none', 300);
+}
+
+window.checkAction = (targetUrl, islemAdi) => {
+    if (!isNobetActive) {
+        const modal = document.getElementById('nobetUyariModal');
+        document.getElementById('nobetUyariMesaj').innerHTML = `⚠️ <b>${islemAdi}</b> için önce <b>Nöbet teslim almalısın.</b>`;
+        modal.style.display = 'flex';
+        setTimeout(() => modal.querySelector('.modal-content').classList.add('show'), 10);
+    } else {
+        if(targetUrl !== "") window.location.href = targetUrl;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('guard-name-display').innerText = (currentUser.name || currentUser.username || "GÜVENLİK").toUpperCase();
+});
+
+window.logout = () => { sessionStorage.clear(); window.location.href = "index.html"; };
+window.goToNobet = () => { window.location.href = "nobet.html"; };
+window.goToEgitim = () => { window.location.href = "egitim.html"; };
+
+window.openEmergencyModal = () => {
+    if (!isNobetActive) {
+        checkAction('', 'Acil durum paneline erişmek');
+        return;
+    }
+    const modal = document.getElementById('emergencyModal');
+    modal.style.display = 'flex';
+    setTimeout(() => modal.querySelector('.modal-content').classList.add('show'), 10);
+};
+
+window.closeEmergencyModal = () => {
+    const modal = document.getElementById('emergencyModal');
+    modal.querySelector('.modal-content').classList.remove('show');
+    setTimeout(() => modal.style.display = 'none', 300);
+};
+function trackEmergencyNumbers() {
+    const settingsRef = ref(db, "settings");
+    onValue(settingsRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            const mdrNum = data.mdr || "";
+            const krkNum = data.krk || "";
+
+            const mdrBtn = document.getElementById('btn-call-merkez');
+            const krkBtn = document.getElementById('btn-call-karakol');
+
+            if (mdrBtn && mdrNum) {
+                mdrBtn.href = `tel:${mdrNum}`;
+                mdrBtn.style.display = "flex";
+            } else if (mdrBtn) {
+                mdrBtn.style.display = "none";
+            }
+
+            if (krkBtn && krkNum) {
+                krkBtn.href = `tel:${krkNum}`;
+                krkBtn.style.display = "flex";
+            } else if (krkBtn) {
+                krkBtn.style.display = "none";
+            }
+        }
+    });
+}
+</script>
+</head>
+<body>
+
+<div id="toast-container"></div>
+
+<div class="app-container">
+    <header>
+        <div class="logo-area">
+            <span class="material-symbols-outlined" style="color:var(--primary); font-weight: bold; font-size: 20px;">security</span>
+            <span class="logo-text">KOD</span>
+        </div>
+        <div class="terminal-id">
+            <div><span class="highlight">K</span><span>OLART</span></div>
+            <div><span class="highlight">O</span><span>NLİNE</span></div>
+            <div><span class="highlight">D</span><span>ENETİM</span></div>
+        </div>
+    </header>
+
+    <main>
+        <section class="status-card">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                <div>
+                    <p class="status-label">AKTİF GÖREVLİ</p>
+                    <h2 class="guard-name" id="guard-name-display">YÜKLENİYOR...</h2>
+                </div>
+                <div class="badge-online">ÇEVRİMİÇİ</div>
+            </div>
+
+            <div class="info-row">
+                <div class="site-info-wrapper">
+                    <p class="status-label">GÖREV YERİ</p>
+                    <p class="site-name-inline">
+                        <span class="material-symbols-outlined" style="font-size:14px;">location_on</span>
+                        <span id="site-name-display">...</span>
+                    </p>
+                </div>
+                <div style="text-align: right;" id="nobetTimerWrapper">
+                    <p class="status-label">NÖBET SÜRESİ</p>
+                    <p class="nobet-timer" id="nobetTimer">00:00:00</p>
+                </div>
+            </div>
+
+    <div class="card-footer">
+    <div class="shift-info">
+        <span id="shift-icon" class="material-symbols-outlined" style="font-size:14px">history</span>
+        <span id="shift-text">20:00 — 08:00</span>
+    </div>
+    <span class="material-symbols-outlined" style="font-size:18px; font-weight:bold; opacity:0.4;">qr_code_scanner</span>
+</div>
+</section>
+
+<h3 class="section-title">Nöbet Yönetimi</h3>
+<div id="nobet-al-area" class="action-item" onclick="goToNobet()" style="margin-bottom:12px; flex-direction: row; align-items: center; gap: 15px;">
+    <div class="icon-box"><span class="material-symbols-outlined">play_circle</span></div>
+    <div>
+        <span class="status-label" style="opacity:1; color:var(--primary); margin:0;">NÖBETİ BAŞLAT</span>
+        <p style="font-size:11px; color:var(--text-muted);">Göreve başlamak için dokun</p>
+    </div>
+</div>
+
+<div id="nobet-teslim-area" class="action-item" onclick="goToNobet()" style="margin-bottom:12px; flex-direction: row; align-items: center; gap: 15px; display:none;">
+    <div class="icon-box" style="color:var(--error); background:rgba(255, 77, 77, 0.1);"><span class="material-symbols-outlined">stop_circle</span></div>
+    <div>
+        <span class="status-label" style="opacity:1; color:var(--error); margin:0;">NÖBETİ TESLİM ET</span>
+        <p style="font-size:11px; color:var(--text-muted);">Görev bitirmek için dokun</p>
+    </div>
+</div>
+
+<h3 class="section-title">Hızlı İşlemler</h3>
+<div class="action-grid">
+    <div onclick="checkAction('devriye.html', 'Devriye başlatmak')" class="action-item">
+        <div class="icon-box"><span class="material-symbols-outlined">directions_walk</span></div>
+        <span class="status-label" style="opacity:1; color:#fff">Devriye BAŞLAT</span>
+    </div>
+
+    <div onclick="checkAction('olay.html', 'Olay bildirmek')" class="action-item">
+        <div class="icon-box"><span class="material-symbols-outlined">report_problem</span></div>
+        <span class="status-label" style="opacity:1; color:#fff">Olay Bildir</span>
+    </div>
+
+<div onclick="window.location.href='ara.html'" class="action-item" style="cursor: pointer;">
+    <div class="icon-box">
+        <span class="material-symbols-outlined">call</span>
+    </div>
+    <span class="status-label" style="color:#fff">Hızlı Arama</span>
+</div>
+
+    <div class="action-item" style="border-color: rgba(255, 77, 77, 0.4);" onclick="openEmergencyModal()">
+        <div class="icon-box" style="color:var(--error); background:rgba(255, 77, 77, 0.1);"><span class="material-symbols-outlined">emergency</span></div>
+        <span class="status-label" style="color:var(--error); opacity:1;">Acil Durum</span>
+    </div>
+</div>
+<div id="araKayitButonAlani" class="action-item" onclick="window.location.href='kayit.html'" style="display:none; border-color: var(--primary); margin-top: 12px; grid-column: span 2; flex-direction: row; align-items: center; gap: 15px;">
+    <div class="icon-box"><span class="material-symbols-outlined">app_registration</span></div>
+    <div>
+        <span class="status-label" style="opacity:1; color:var(--primary); margin:0;">KAYIT PANELİ</span>
+        <p style="font-size:11px; color:var(--text-muted);">Hızlı Arama Kayıt Ekranı</p>
+    </div>
+</div>
+
+
+    <div id="profileMenuModal" class="modal-overlay" onclick="toggleProfileMenu(false)">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-title"><span class="material-symbols-outlined">account_circle</span> Profil İşlemleri</div>
+            <div class="menu-btn" onclick="openSettings()"><span class="material-symbols-outlined">settings</span><span>Profil Ayarlarım</span></div>
+            <div class="menu-btn" onclick="sendLiveLocation()"><span class="material-symbols-outlined">share_location</span><span>Merkeze Konum Gönder</span></div>
+            <div class="menu-btn" onclick="goToEgitim()" style="border-color: #3498db33;"><span class="material-symbols-outlined" style="color:#3498db">school</span><span>Eğitim Paneli</span></div>
+            <button class="modal-btn btn-secondary" onclick="toggleProfileMenu(false)">VAZGEÇ</button>
+        </div>
+    </div>
+
+    <div id="locationStatusModal" class="modal-overlay">
+        <div class="modal-content" style="padding: 40px 20px;">
+            <div id="locStatusIconArea"></div>
+            <h2 id="locStatusTitle" style="font-weight: 900; margin-bottom: 10px; letter-spacing: 1px;">KONUM ALINIYOR...</h2>
+            <p id="locStatusDesc" style="font-size: 14px; opacity: 0.7; margin-bottom: 30px;"></p>
+            <button id="locModalCloseBtn" class="modal-btn btn-primary" onclick="closeLocModal()">ANLADIM</button>
+        </div>
+    </div>
+
+<div id="settingsModal" class="modal-overlay" onclick="closeSettings()">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-title">
+            <span class="material-symbols-outlined" style="color:var(--primary)">manage_accounts</span>
+            Profil Ayarları
+        </div>
+        
+        <div class="form-group">
+            <label>Personel Adı</label>
+            <input type="text" id="profName" disabled style="opacity: 0.6;">
+        </div>
+        
+        <div class="form-group">
+            <label>Telefon Numarası</label>
+            <input type="tel" id="newPhone" placeholder="Yükleniyor...">
+        </div>
+        
+        <div class="form-group">
+            <label>Yeni Şifre</label>
+            <input type="password" 
+                   id="newPass" 
+                   inputmode="numeric" 
+                   pattern="[0-9]*" 
+                   placeholder="YENİ ŞİFRE SADECE RAKAM İÇERMELİDİR" 
+                   oninput="handlePassInput(event)">
+            
+            <span class="material-symbols-outlined pass-toggle" id="passIcon" onclick="togglePassword()">visibility</span>
+            
+            <div id="password-requirements" style="margin-top: 12px; font-size: 11px; color: #ccc; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+                <div id="req-length" style="display: flex; align-items: center; gap: 8px; margin-bottom: 5px;">
+                    <span class="material-symbols-outlined" style="font-size: 16px; color: #ff4d4d;">cancel</span> 6 - 15 Hane Arası
+                </div>
+                <div id="req-only-num" style="display: flex; align-items: center; gap: 8px;">
+                    <span class="material-symbols-outlined" style="font-size: 16px; color: #ff4d4d;">cancel</span> Sadece Rakam Girilebilir
+                </div>
+            </div>
+        </div>
+
+        <button class="modal-btn btn-primary" onclick="updateProfile()" style="margin-top: 10px;">BİLGİLERİ GÜNCELLE</button>
+        <button class="modal-btn btn-secondary" onclick="closeSettings()">VAZGEÇ</button>
+    </div>
+</div>
+
+    <div id="nobetUyariModal" class="modal-overlay" onclick="const m=document.getElementById('nobetUyariModal'); m.querySelector('.modal-content').classList.remove('show'); setTimeout(()=>m.style.display='none',300)">
+        <div class="modal-content" onclick="event.stopPropagation()" style="border-top: 1px solid var(--error); padding-bottom: 40px;">
+            <div class="modal-title" style="color: var(--error); margin-bottom: 10px;"><span class="material-symbols-outlined">lock</span>ERİŞİM KISITLANDI</div>
+            <p id="nobetUyariMesaj" style="color: var(--text-main); font-size: 15px; font-weight: 600; line-height: 1.6; margin-bottom: 25px; opacity: 0.9;">İşlem için önce nöbeti teslim almalısın.</p>
+            <button class="modal-btn btn-primary" onclick="window.location.href='nobet.html'">ŞİMDİ NÖBETİ BAŞLAT</button>
+            <button class="modal-btn btn-secondary" onclick="const m=document.getElementById('nobetUyariModal'); m.querySelector('.modal-content').classList.remove('show'); setTimeout(()=>m.style.display='none',300)" style="margin-top: 10px; opacity: 0.6;">KAPAT</button>
+        </div>
+    </div>
+
+
+</div>
+<div id="emergencyModal" class="modal-overlay">
+    <div class="modal-content" style="border-top: 3px solid var(--error); padding-bottom: 40px; position: relative;">
+        
+        <span class="material-symbols-outlined" 
+              onclick="closeEmergencyModal()" 
+              style="position: absolute; top: 20px; right: 20px; color: var(--text-muted); cursor: pointer;">close</span>
+
+        <div class="modal-title" style="color: var(--error); justify-content: center; margin-bottom: 30px;">
+            <span class="material-symbols-outlined" style="font-size: 30px;">emergency_home</span>
+            ACİL YARDIM PANELİ
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+            <a href="tel:112" class="menu-btn" style="background: #7a0000; border: 2px solid #ff4d4d; padding: 25px; height: auto; flex-direction: row; justify-content: center; text-decoration: none;">
+                <span class="material-symbols-outlined" style="font-size: 35px; color: #fff;">medical_services</span>
+                <div style="text-align: left;">
+                    <div style="font-size: 20px; font-weight: 900; color: #fff; letter-spacing: 1px;">112 ACİL ARA</div>
+                    <div style="font-size: 11px; color: rgba(255,255,255,0.7); font-weight: 600;">AMBULANS / POLİS / İTFAİYE</div>
+                </div>
+            </a>
+
+            <a href="#" id="btn-call-merkez" class="menu-btn" style="background: #000; border: 2px solid var(--primary); padding: 25px; height: auto; flex-direction: row; justify-content: center; text-decoration: none;">
+                <span class="material-symbols-outlined" style="font-size: 35px; color: var(--primary);">phone_in_talk</span>
+                <div style="text-align: left;">
+                    <div style="font-size: 20px; font-weight: 900; color: #fff; letter-spacing: 1px;">MERKEZİ ARA</div>
+                    <div style="font-size: 11px; color: var(--primary); font-weight: 600;">KOLART GÜVENLİK </div>
+                </div>
+            </a>
+
+            <a href="#" id="btn-call-karakol" class="menu-btn" style="background: #000; border: 2px solid #3498db; padding: 25px; height: auto; flex-direction: row; justify-content: center; text-decoration: none;">
+                <span class="material-symbols-outlined" style="font-size: 35px; color: #3498db;">local_police</span>
+                <div style="text-align: left;">
+                    <div style="font-size: 20px; font-weight: 900; color: #fff; letter-spacing: 1px;">KARAKOLU ARA</div>
+                    <div style="font-size: 11px; color: #3498db; font-weight: 600;">BÖLGE KARAKOLU</div>
+                </div>
+            </a>
+        </div>
+
+        <button class="modal-btn btn-secondary" 
+                onclick="closeEmergencyModal()" 
+                style="margin-top: 25px; height: 55px; font-size: 14px; letter-spacing: 1px; border: 1px solid var(--border);">
+            İPTAL / KAPAT
+        </button>
+    </div>
+</div>
+<script src="nav.js"></script>
+</body>
+</html>

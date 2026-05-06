@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CGA - Ek Çalışma Kayıtları</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --border: #000; }
+        body { font-family: 'Montserrat', sans-serif; background: #f4f7f6; padding: 10px; margin: 0; }
+        .container { max-width: 1400px; margin: auto; background: white; padding: 15px; border: 2px solid #000; }
+        .main-title { text-align: center; font-size: 15px; font-weight: bold; background: #eee; padding: 10px; border: 1px solid #000; margin-bottom: 15px; }
+        .input-panel { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; padding: 15px; border: 1px solid #000; background: #fafafa; margin-bottom: 20px; }
+        .f-box { display: flex; flex-direction: column; }
+        .f-box label { font-size: 10px; font-weight: bold; margin-bottom: 3px; }
+        input, select { padding: 8px; border: 1px solid #000; font-family: 'Montserrat'; font-size: 12px; }
+        .btn-add { background: #27ae60; color: white; border: none; font-weight: bold; cursor: pointer; height: 38px; align-self: flex-end; }
+        .table-wrap { width: 100%; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 1100px; }
+        th, td { border: 1px solid var(--border); padding: 5px; text-align: center; font-size: 11px; height: 40px; }
+        th { background: #2c3e50; color: white; }
+        .btn-del { color: red; border: none; background: none; cursor: pointer; font-weight: bold; }
+        .btn-back { margin-top: 15px; padding: 10px 20px; background: #eee; border: 1px solid #000; font-weight: bold; cursor: pointer; }
+        .user-tag-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; }
+        .user-tag { font-size: 10px; color: #27ae60; font-weight: bold; }
+        .btn-filter { background: #2c3e50; color: white; border: 1px solid #000; font-size: 9px; padding: 3px 8px; cursor: pointer; font-weight: bold; border-radius: 3px; }
+        
+        /* MODAL STYLES */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); }
+        .modal-content { background: white; margin: 10% auto; padding: 20px; border: 2px solid #000; width: 350px; font-size: 12px; }
+        .modal-header { font-weight: bold; border-bottom: 1px solid #000; margin-bottom: 10px; padding-bottom: 5px; display: flex; justify-content: space-between; }
+        .filter-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #eee; }
+        .no-data { padding: 20px; color: #888; font-style: italic; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="user-tag-row">
+        <span id="activeUserTag" class="user-tag">Oturum kontrol ediliyor...</span>
+        <button id="btnOpenFilter" class="btn-filter" style="display:none;">⚙️ ÇIKARILMIŞ PERSONEL YÖNETİMİ</button>
+    </div>
+    
+    <div class="main-title" id="pageTitle">AY İÇİNDE GÖREVE GELMEYEN VE EK ÇALIŞMA ÇİZELGESİ</div>
+
+    <div id="filterModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>ÇIKARILMIŞ PERSONEL YÖNETİMİ</span>
+                <span style="cursor:pointer" onclick="document.getElementById('filterModal').style.display='none'">[KAPAT]</span>
+            </div>
+            <p style="font-size:10px; color:#e67e22; margin-bottom:15px;">İşaretlediğiniz personeller <b>seçim listelerinde</b> gizlenir. Tablodaki geçmiş kayıtlar etkilenmez.</p>
+            <div id="pasifListContainer" style="max-height: 300px; overflow-y: auto;"></div>
+            <button class="btn-back" style="width:100%; margin-top:15px; background:#27ae60; color:white;" onclick="location.reload()">KAYDET VE SAYFAYI YENİLE</button>
+        </div>
+    </div>
+
+    <div class="input-panel">
+        <div class="f-box">
+            <label>Göreve Gelmeyen / İşlem Tipi</label>
+            <select id="gelmeyenUid" onchange="toggleFormMode()">
+                <option value="">-- LÜTFEN SEÇİNİZ --</option>
+                <option value="YOK">-- DIŞ GÖREV --</option>
+            </select>
+        </div>
+
+        <div class="f-box" id="box-nereye" style="display: none;">
+            <label>Nereye Göreve Gidildi?</label>
+            <input type="text" id="nereyeGidildi" placeholder="Örn: Valilik, Stad, Konser">
+        </div>
+
+        <div class="f-box">
+            <label id="lbl-tarih">Tarih</label>
+            <input type="date" id="tarih">
+        </div>
+
+        <div class="f-box" id="box-neden">
+            <label>Gelmeme Nedeni</label>
+            <input type="text" id="neden" placeholder="Rapor, İzin vb.">
+        </div>
+
+        <div class="f-box">
+            <label id="lbl-mesaiYapan">Görevli / Mesai Yapan Personel</label>
+            <select id="mesaiYapanUid"></select>
+        </div>
+
+        <div class="f-box">
+            <label>Vardiya</label>
+            <select id="vardiya">
+                <option value="GÜNDÜZ">GÜNDÜZ</option>
+                <option value="GECE">GECE</option>
+            </select>
+        </div>
+        <button class="btn-add" id="saveBtn">KAYDI GÖNDER</button>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 35px;">S.N</th>
+                    <th>ADI SOYADI</th>
+                    <th>GİDİLEN YER / TELEFON</th>
+                    <th style="width: 110px;">TARİH</th>
+                    <th>NEDEN / AÇIKLAMA</th>
+                    <th>NÖBETE GİDEN / GELEN</th>
+                    <th style="width: 100px;">VARDİYA</th>
+                    <th style="width: 50px;">SİL</th>
+                </tr>
+            </thead>
+            <tbody id="listBody"></tbody>
+        </table>
+    </div>
+
+    <button class="btn-back" onclick="location.href='cizelge.html'">⬅ GERİ DÖN</button>
+</div>
+
+<script type="module">
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getDatabase, ref, get, push, remove, update } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+
+    const SECURITY_KEY = "KOLART_SİSTEM_2026_CGA";
+    const encryptedConfig = localStorage.getItem("siteConfig");
+    const siteID = localStorage.getItem("siteID");
+
+    let siteConfig = null;
+    try {
+        if (encryptedConfig) {
+            const bytes = CryptoJS.AES.decrypt(encryptedConfig, SECURITY_KEY);
+            const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+            siteConfig = decrypted ? JSON.parse(decrypted) : JSON.parse(encryptedConfig);
+        }
+    } catch (e) {
+        try { siteConfig = JSON.parse(encryptedConfig); } catch(err) { siteConfig = null; }
+    }
+
+    const sessionUser = JSON.parse(sessionStorage.getItem('currentUser')) || JSON.parse(localStorage.getItem('currentUser'));
+    const loggedInUserID = sessionUser ? sessionUser.username : localStorage.getItem("userID");
+
+    if (!siteConfig) { window.location.href = "index.html"; }
+
+    const app = getApps().find(a => a.name === `siteApp-${siteID}`) || initializeApp(siteConfig, `siteApp-${siteID}`);
+    const db = getDatabase(app);
+    const auth = getAuth(app);
+
+    onAuthStateChanged(auth, (user) => {
+        if (user || sessionUser) {
+            setup(); 
+        } else {
+            window.location.href = "index.html";
+        }
+    });
+
+    const simdi = new Date();
+    const yilAy = `${simdi.getFullYear()}-${String(simdi.getMonth() + 1).padStart(2, '0')}`;
+    const ayAdi = simdi.toLocaleString('tr-TR', { month: 'long' }).toUpperCase();
+    document.getElementById('pageTitle').innerText = `${ayAdi} - GÖREVE GELMEYEN VE EK ÇALIŞMA ÇİZELGESİ`;
+
+    let users = {};
+    let isAmir = false;
+
+    window.toggleFormMode = function() {
+        const val = document.getElementById('gelmeyenUid').value;
+        const boxes = {
+            nereye: document.getElementById('box-nereye'),
+            neden: document.getElementById('box-neden'),
+            lblTarih: document.getElementById('lbl-tarih'),
+            lblMesai: document.getElementById('lbl-mesaiYapan')
+        };
+
+        if(val === "YOK") {
+            boxes.nereye.style.display = "flex";
+            boxes.neden.style.display = "none";
+            boxes.lblTarih.innerText = "Göreve Gidilen Tarih";
+            boxes.lblMesai.innerText = "Göreve Giden Personel";
+        } else {
+            boxes.nereye.style.display = "none";
+            boxes.neden.style.display = "flex";
+            boxes.lblTarih.innerText = "Göreve Gelmediği Tarih";
+            boxes.lblMesai.innerText = "Yerine Nöbete Gelen";
+        }
+    }
+
+    async function setup() {
+        if(!loggedInUserID) return;
+        
+        const [uSnap, amirSnap] = await Promise.all([
+            get(ref(db, 'users')),
+            get(ref(db, 'settings/cizelgeAmiri'))
+        ]);
+        
+        users = uSnap.val() || {};
+        const currentAmirID = amirSnap.val() || "";
+        isAmir = (loggedInUserID === currentAmirID); 
+        
+        const currentUserData = users[loggedInUserID] || {};
+        document.getElementById('activeUserTag').innerText = (isAmir ? "AMİR: " : "GÜVENLİK: ") + (currentUserData.name || loggedInUserID);
+
+        if(isAmir) {
+            const btn = document.getElementById('btnOpenFilter');
+            btn.style.display = "block";
+            btn.onclick = () => {
+                renderPasifList();
+                document.getElementById('filterModal').style.display = 'block';
+            };
+        }
+
+        const gSelect = document.getElementById('gelmeyenUid');
+        const mSelect = document.getElementById('mesaiYapanUid');
+        
+        gSelect.innerHTML = '<option value="">-- LÜTFEN SEÇİNİZ --</option><option value="YOK">-- DIŞ GÖREV --</option>';
+        mSelect.innerHTML = '';
+
+        Object.keys(users).forEach(uid => {
+            const u = users[uid];
+            // SEÇİM LİSTESİNDE FİLTRELEME:
+            // Eğer isActive true ise ekle. false ise sadece hidden işaretlenmemişse ekle.
+            if(u.type === 'security') {
+                if(u.isActive !== false || u.hidden !== true) {
+                    const name = u.name || uid;
+                    gSelect.innerHTML += `<option value="${uid}">${name}</option>`;
+                    mSelect.innerHTML += `<option value="${uid}">${name}</option>`;
+                }
+            }
+        });
+        mSelect.value = loggedInUserID;
+        toggleFormMode();
+        renderTable();
+    }
+
+    function renderPasifList() {
+        const container = document.getElementById('pasifListContainer');
+        container.innerHTML = "";
+        
+        Object.keys(users).forEach(uid => {
+            const u = users[uid];
+            if(u.isActive === false) {
+                const div = document.createElement('div');
+                div.className = "filter-item";
+                div.innerHTML = `
+                    <input type="checkbox" id="chk-${uid}" ${u.hidden ? 'checked' : ''} onchange="updateHiddenProp('${uid}', this.checked)">
+                    <label for="chk-${uid}" style="font-weight:600; cursor:pointer;">${u.name || uid}</label>
+                `;
+                container.appendChild(div);
+            }
+        });
+
+        if(container.innerHTML === "") {
+            container.innerHTML = "<p style='text-align:center; color:#999;'>Pasif kullanıcı (isActive:false) bulunamadı.</p>";
+        }
+    }
+
+    window.updateHiddenProp = async (uid, val) => {
+        try {
+            await update(ref(db, `users/${uid}`), { hidden: val });
+        } catch (e) { alert("Güncelleme hatası!"); }
+    };
+
+    async function renderTable() {
+        try {
+            const snap = await get(ref(db, `ekMesailer/${yilAy}`));
+            const allData = snap.val() || {};
+            const tbody = document.getElementById('listBody');
+            tbody.innerHTML = '';
+            
+            const keys = Object.keys(allData);
+            const filteredKeys = isAmir ? keys : keys.filter(k => allData[k].olusturanUid === loggedInUserID);
+
+            let rowCounter = 0;
+            filteredKeys.forEach((key) => {
+                const item = allData[key];
+                const isDisGorev = item.gelmeyenUid === "YOK";
+                
+                // TABLODA GİZLEME YOK: Geçmiş kayıtlar her zaman görünür.
+                rowCounter++;
+                const name = isDisGorev ? "DIŞ GÖREV" : (users[item.gelmeyenUid]?.name || item.gelmeyenUid);
+                const info = isDisGorev ? `📍 ${item.nereyeGidildi || '-'}` : (users[item.gelmeyenUid]?.phone || "-");
+                const formattedDate = item.tarih ? item.tarih.split('-').reverse().join('.') : "-";
+                const neden = isDisGorev ? "DIŞ GÖREVLENDİRME" : (item.neden || "-");
+                const mesaiYapan = users[item.mesaiYapanUid]?.name || item.mesaiYapanUid;
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${rowCounter}</td>
+                    <td>${name}</td>
+                    <td>${info}</td>
+                    <td>${formattedDate}</td>
+                    <td>${neden}</td>
+                    <td><b>${mesaiYapan}</b></td>
+                    <td>${item.vardiya}</td>
+                    <td><button class="btn-del" onclick="deleteRec('${key}')">X</button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (rowCounter === 0) {
+                tbody.innerHTML = `<tr><td colspan="8" class="no-data">${ayAdi} ayına ait kayıt bulunmamaktadır.</td></tr>`;
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    document.getElementById('saveBtn').onclick = async () => {
+        const gelmeyen = document.getElementById('gelmeyenUid').value;
+        const tarih = document.getElementById('tarih').value;
+        const nereye = document.getElementById('nereyeGidildi').value.trim();
+        const neden = document.getElementById('neden').value.trim();
+
+        if(!gelmeyen || !tarih) return alert("Lütfen gerekli alanları doldurun!");
+        
+        const isDisGorev = gelmeyen === "YOK";
+        const record = {
+            gelmeyenUid: gelmeyen,
+            nereyeGidildi: isDisGorev ? nereye.toUpperCase() : "",
+            tarih: tarih,
+            neden: isDisGorev ? "DIŞ GÖREV" : neden.toUpperCase(),
+            mesaiYapanUid: document.getElementById('mesaiYapanUid').value,
+            vardiya: document.getElementById('vardiya').value,
+            olusturanUid: loggedInUserID 
+        };
+
+        await push(ref(db, `ekMesailer/${yilAy}`), record);
+        document.getElementById('neden').value = "";
+        document.getElementById('nereyeGidildi').value = "";
+        renderTable();
+    };
+
+    window.deleteRec = async (key) => {
+        if(confirm("Kaydı silmek istiyor musunuz?")) {
+            await remove(ref(db, `ekMesailer/${yilAy}/${key}`));
+            renderTable();
+        }
+    };
+</script>
+</body>
+</html>

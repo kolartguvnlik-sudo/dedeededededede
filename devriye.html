@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="tr" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>KOLART — Canlı Devriye Sistemi</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <style>
+        :root { --primary: #CCFF00; --bg: #080808; --card: #121212; --border: rgba(255,255,255,0.08); --error: #FF3B30; --text-dim: rgba(255,255,255,0.4); --warning: #f1c40f; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg); color: #fff; display: flex; flex-direction: column; align-items: center; overflow-x: hidden; }
+        
+        #offlineAlertBar { display: none; width: 100%; background: var(--error); color: white; text-align: center; padding: 15px 10px; font-size: 11px; font-weight: 900; position: sticky; top: 0; z-index: 10000; letter-spacing: 0.5px; border-bottom: 2px solid rgba(0,0,0,0.2); }
+
+        .app-container { width: 100%; max-width: 390px; min-height: 100vh; background: var(--bg); position: relative; padding-bottom: 120px; }
+        header { padding: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+        .header-left { display: flex; align-items: center; gap: 8px; }
+        .header-left span.logo-text { font-weight: 900; font-size: 20px; letter-spacing: 1px; }
+        .header-right { text-align: right; }
+        .brand-sub { font-size: 10px; font-weight: 900; letter-spacing: 1px; }
+        .brand-sub .neon { color: var(--primary); }
+
+        .info-card { background: var(--card); margin: 8px 16px; padding: 18px; border-radius: 22px; border: 1px solid var(--border); }
+        .card-label { font-size: 9px; font-weight: 800; color: var(--text-dim); letter-spacing: 1.5px; margin-bottom: 6px; text-transform: uppercase; }
+        .route-title { font-size: 20px; font-weight: 900; margin-bottom: 12px; color: #fff; letter-spacing: -0.5px; }
+        
+        .progress-line { display: flex; justify-content: space-between; align-items: center; }
+        .percent-val { color: var(--primary); font-weight: 900; font-size: 13px; }
+        .time-val { color: #FFFFFF; font-size: 24px; font-weight: 900; font-family: monospace; text-shadow: 0 0 15px rgba(255,255,255,0.3); }
+
+        .stats-grid { display: flex; justify-content: space-between; align-items: flex-end; }
+        .counter-val { font-size: 32px; font-weight: 900; color: #fff; letter-spacing: -1px; }
+        .status-box { text-align: right; }
+        .status-box h4 { color: var(--primary); font-weight: 900; font-size: 11px; text-transform: uppercase; }
+
+        #qrListContainer { padding: 4px 16px; }
+        .qr-card { background: var(--card); border-radius: 16px; margin-bottom: 8px; display: flex; align-items: center; border: 1px solid var(--border); transition: 0.3s; padding: 6px; }
+        .qr-icon-side { background: var(--primary); width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; margin-right: 12px; }
+        .qr-icon-side span { color: #000; font-size: 24px; font-weight: bold; }
+        .qr-info h3 { font-size: 14px; font-weight: 900; text-transform: uppercase; color: #fff; margin-bottom: 1px; }
+        .qr-info p { font-size: 10px; font-weight: 800; letter-spacing: 0.3px; }
+        .waiting { color: var(--primary); opacity: 0.8; }
+        .completed { color: #2ecc71; }
+
+        .patrol-footer { position: fixed; bottom: 0; width: 100%; max-width: 388px; padding: 24px; background: linear-gradient(0deg, rgba(8,8,8,1) 0%, rgba(8,8,8,0.8) 100%); border-top: 1px solid var(--border); z-index: 500; backdrop-filter: blur(20px); }
+        .action-btn { width: 100%; padding: 20px; border-radius: 22px; font-weight: 900; font-size: 15px; border: none; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; transition: 0.2s; }
+        #startBtn { background: var(--primary); color: #000; box-shadow: 0 10px 25px rgba(204, 255, 0, 0.3); }
+        #endBtn { background: #FFFFFF; color: #000; }
+
+        #securityOverlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.95); z-index: 20000; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; }
+        #countdownNumber { font-size: 120px; font-weight: 900; color: var(--primary); font-family: monospace; line-height: 1; margin: 20px 0; }
+        
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.98); z-index: 10000; flex-direction: column; align-items: center; justify-content: center; padding: 25px; }
+        .critical-box { background: #1a0a0a; border: 2px solid var(--error); padding: 30px; border-radius: 35px; width: 100%; max-width: 340px; text-align: center; }
+        
+        #incidentNote { width:100%; background:#000; border:1px solid #333; border-radius:12px; color:#fff; padding:12px; font-size:13px; height:80px; outline:none; resize:none; margin-top:10px; }
+        #forceFinishBtn:disabled { background: #222 !important; color: #444 !important; cursor: not-allowed; border: 1px solid #333; }
+        #forceFinishBtn:active {
+    transform: scale(0.96); /* İçeri çökme efekti */
+    filter: brightness(1.2); /* Basınca parlaması */
+}
+
+/* Buton aktif olduğunda hafifçe "hazırım" diye parlasın */
+#forceFinishBtn:not(:disabled) {
+    animation: pulseRed 2s infinite;
+    cursor: pointer;
+}
+
+@keyframes pulseRed {
+    0% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0.7); }
+    70% { box-shadow: 0 0 0 15px rgba(255, 59, 48, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 59, 48, 0); }
+}
+        .char-count { font-size: 10px; color: #ff3b30; font-weight: 800; margin-top: 5px; display: block; text-align: right; }
+
+        .custom-alert-box { background: var(--card); border: 1px solid var(--border); padding: 30px; border-radius: 30px; text-align: center; width: 100%; max-width: 320px; }
+        .custom-alert-btn { background: var(--primary); color: #000; border: none; padding: 15px 40px; border-radius: 15px; font-weight: 900; margin-top: 20px; cursor: pointer; text-transform: uppercase; width: 100%; }
+		.info-card { position: relative; } /* Kartın içindeki butonu hizalamak için */
+#eliteSelectBadge { 
+    display: none; 
+    position: absolute; 
+    top: 15px; 
+    right: 15px; 
+    background: var(--primary); 
+    color: #000; 
+    padding: 6px 12px; 
+    border-radius: 10px; 
+    font-size: 11px; 
+    font-weight: 900; 
+    cursor: pointer; 
+    box-shadow: 0 0 15px rgba(204, 255, 0, 0.4); 
+    z-index: 100;
+}
+@keyframes blinker {
+    50% { opacity: 0.3; }
+}
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
+/* İkonların dikeyde tam ortalanmasını sağlayan CSS */
+.action-btn .material-symbols-outlined {
+    font-size: 22px; /* İkon boyutu */
+    vertical-align: middle; /* Dikey hizalama */
+    line-height: 1; /* Satır yüksekliği */
+    margin-right: 10px; /* İkon ile yazı arasındaki boşluk */
+}
+    </style>
+</head>
+<body>
+
+<div id="offlineAlertBar">
+    <div style="font-size: 14px; margin-bottom: 4px;">⚠️ İNTERNET BAĞLANTISI YOK</div>
+    <div style="font-size: 10px; font-weight: 400; text-transform: none; opacity: 0.9;">
+        Şu anda çevrimdışı çalışıyorsunuz. <br>
+        <b>SAYFAYI YENİLEMEYİN VE KAPATMAYIN!</b> <br>
+        QR okutmaya devam edin, her şey kaydediliyor.
+    </div>
+</div>
+
+<div class="app-container">
+    <header>
+        <div class="header-left">
+            <span class="material-symbols-outlined" style="color:var(--primary); font-variation-settings: 'FILL' 1;">shield</span>
+            <span class="logo-text">KOD</span>
+        </div>
+        <div class="header-right">
+            <div class="brand-sub"><span class="neon">KOLART</span> ONLINE DENETİM</div>
+        </div>
+    </header>
+
+<div class="info-card">
+    <div id="eliteSelectBadge" onclick="openBlockModal()">SEÇ</div>
+        <p class="card-label">AKTİF DEVRİYE ROTASI</p>
+        <h2 class="route-title" id="routeName">YÜKLENİYOR...</h2>
+        <div class="progress-line">
+            <span class="percent-val" id="percentText">%0 TAMAMLANDI</span>
+            <span class="time-val" id="timerDisplay">00:00:00</span>
+        </div>
+    </div>
+
+    <div class="info-card" style="padding: 15px 18px;">
+        <div class="stats-grid">
+            <div>
+                <p class="card-label">KONTROL NOKTALARI</p>
+                <div class="counter-val" id="counterDisplay">0/0</div>
+            </div>
+            <div class="status-box">
+                <p class="card-label" style="margin-bottom:2px;">DURUM</p>
+                <h4 id="statusLabel">HAZIR</h4>
+            </div>
+        </div>
+    </div>
+
+    <div id="qrListContainer"></div>
+
+<div class="patrol-footer">
+    <div style="display: flex; gap: 12px; width: 100%; align-items: stretch; justify-content: center;">
+        
+        <button id="backHomeBtn" class="action-btn" style="background: #1a1a1a; color: #fff; border: 1.5px solid var(--border); flex: 1; min-height: 56px; display: flex; align-items: center; justify-content: center; padding: 0 15px; border-radius: 20px;">
+            <span class="material-symbols-outlined">home</span>
+            <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">ANASAYFA</span>
+        </button>
+
+        <button id="startBtn" class="action-btn" style="background: var(--primary); color: #000; flex: 1; min-height: 56px; display: flex; align-items: center; justify-content: center; padding: 0 15px; border-radius: 20px;">
+            <span class="material-symbols-outlined">play_circle</span>
+            <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">BAŞLAT</span>
+        </button>
+
+        <button id="endBtn" class="action-btn" style="background: #fff; color: #000; flex: 1; min-height: 56px; display: none; align-items: center; justify-content: center; padding: 0 15px; border-radius: 20px;">
+            <span class="material-symbols-outlined">stop_circle</span>
+            <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">BİTİR</span>
+        </button>
+
+        <button id="incidentBtn" class="action-btn" style="background: #1a1a1a; color: #ff3b30; border: 1px solid #ff3b30; flex: 1; min-height: 56px; display: none; align-items: center; justify-content: center; padding: 0 15px; border-radius: 20px;">
+            <span class="material-symbols-outlined">report</span>
+            <span style="font-size: 13px; font-weight: 900; text-transform: uppercase;">OLAY BİLDİR</span>
+        </button>
+
+    </div>
+</div>
+
+<div id="appModal" class="modal">
+    <div class="custom-alert-box">
+        <span id="appModalIcon" class="material-symbols-outlined" style="font-size: 50px; color: var(--primary); margin-bottom: 15px;">info</span>
+        <h3 id="appModalTitle" style="font-weight: 900; margin-bottom: 10px;">BİLGİ</h3>
+        <p id="appModalText" style="font-size: 13px; opacity: 0.8; line-height: 1.5;"></p>
+        <button class="custom-alert-btn" onclick="closeAppModal()">TAMAM</button>
+    </div>
+</div>
+
+<div id="confirmModal" class="modal">
+    <div class="critical-box">
+        <span class="material-symbols-outlined" style="font-size: 60px; color: #f1c40f;">report_problem</span>
+        <h2 style="color:#f1c40f; font-size: 20px; margin-top:10px;">EKSİK NOKTA !</h2>
+        <p style="font-size:13px; color:#fff; opacity:0.9; margin-top:15px; line-height:1.5;">
+            Rotadaki tüm noktaları okutmadığınız için devriyeyi normal şekilde bitiremezsiniz. 
+            <br><br>
+            <b>Neden okutmadığınızı şirkete bildirmeniz gerekmektedir.</b>
+        </p>
+        <div id="incidentArea" style="margin-top:20px; text-align:left;">
+            <p style="font-size:10px; color:var(--primary); font-weight:900; text-transform:uppercase;">Eksik Nokta Sebebi (Zorunlu)</p>
+            <textarea id="incidentNote" placeholder="Örn: C blok girişi kilitli olduğu için girilemedi..."></textarea>
+            <span id="charWarning" class="char-count">En az 15 karakter yazmalısınız!</span>
+        </div>
+<button id="forceFinishBtn" disabled style="width:100%; background:var(--error); color:#fff; border:none; padding:18px; border-radius:20px; font-weight:900; margin-top:20px; text-transform:uppercase; display:flex; align-items:center; justify-content:center; gap:8px;">
+    <span class="material-symbols-outlined" id="finishIcon">send_and_archive</span>
+    <span id="finishText">Devriyeyi Bitir / Raporu Gönder</span>
+</button>
+        <button onclick="document.getElementById('confirmModal').style.display='none'" style="width:100%; background:rgba(255,255,255,0.1); color:#fff; border:none; padding:15px; border-radius:20px; font-weight:700; margin-top:10px;">DEVRİYEYE DEVAM ET</button>
+    </div>
+</div>
+
+<div id="securityOverlay">
+    <span class="material-symbols-outlined" style="color:var(--primary); font-size: 56px; margin-bottom: 15px; animation: pulse 1s infinite;">fmd_bad</span>
+    <p style="color:#fff; font-weight:900; text-transform:uppercase; font-size:16px; letter-spacing:1px;">OKUTULAN NOKTA KORDİNATLARI ŞİRKETE İLETİLİYOR....</p>
+    
+    <div id="countdownNumber" style="text-shadow: 0 0 30px var(--primary);">10</div>
+    
+    <div style="background: rgba(204, 255, 0, 0.1); border: 1px solid var(--primary); padding: 15px; border-radius: 15px; margin: 10px 0;">
+        <p style="color:var(--primary); font-size:11px; font-weight:900; text-transform:uppercase; line-height:1.4;">
+            UYDU BAĞLANTISI KURULUYOR... <br>
+            HASSAS KOORDİNAT VERİLERİ ŞİRKETE AKTARILIYOR.
+        </p>
+    </div>
+
+    <p style="color:var(--error); font-size:11px; font-weight:900; margin-top:15px; border:2px solid var(--error); padding:12px; border-radius:12px; background: rgba(255, 59, 48, 0.1); animation: blinker 0.8s linear infinite;">
+        ⚠️ DİKKAT: NOKTADAN AYRILMAYIN! <br>
+        ERKEN AYRILMA DURUMUNDA "GEÇERSİZ TARAMA" RAPORU OLUŞTURULUR.
+    </p>
+</div>
+
+<div id="blockSelectModal" class="modal">
+    <div style="background:var(--card); padding:30px; border-radius:35px; border:1px solid var(--border); width:100%; max-width:340px; text-align:center;">
+        <h3 style="color:var(--primary); margin-bottom:20px; font-weight:900;">BÖLGE / BLOK SEÇ</h3>
+        <div id="blockListArea" style="max-height:300px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;"></div>
+        <button onclick="document.getElementById('blockSelectModal').style.display='none'" style="margin-top:20px; color:var(--text-dim); background:none; border:none; font-weight:bold;">KAPAT</button>
+    </div>
+</div>
+
+<div id="qrScannerModal" class="modal">
+    <div id="reader" style="width:100%; max-width:320px; border-radius:30px; overflow:hidden; border:4px solid var(--primary);"></div>
+    <div style="margin-top:30px; display:flex; gap:20px;">
+        <button id="flashBtn" style="background:#222; color:#fff; border:none; width:60px; height:60px; border-radius:20px; display:flex; align-items:center; justify-content:center;"><span class="material-symbols-outlined">flashlight_on</span></button>
+        <button onclick="closeScanner()" style="background:var(--error); color:#fff; border:none; padding:0 30px; border-radius:20px; font-weight:900;">İPTAL</button>
+    </div>
+</div>
+<div id="equipmentModal" class="modal" style="display:none; z-index: 10001; background:rgba(0,0,0,0.9); position:fixed; top:0; left:0; width:100%; height:100%; align-items:center; justify-content:center;">
+    <div style="background:#111; padding:30px; border-radius:30px; border:1px solid #333; width:90%; max-width:350px; text-align:center;">
+        <span class="material-symbols-outlined" style="font-size: 50px; color: var(--primary); margin-bottom: 15px;">security</span>
+        <h3 style="color:#fff; margin-bottom:20px; font-weight:900;">GÜVENLİK KONTROLÜ</h3>
+        
+        <div style="text-align:left; gap:15px; display:flex; flex-direction:column;">
+            <div style="background:#1a1a1a; padding:15px; border-radius:15px; border: 1px solid rgba(204, 255, 0, 0.1);">
+                <p style="font-size:11px; color:var(--primary); font-weight:900; margin-bottom:10px;">0. GPS / KONUM SERVİSİNİ AÇTIN MI?</p>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="checkEq('gps', true)" id="gpsEvet" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">EVET</button>
+                    <button onclick="checkEq('gps', false)" id="gpsHayir" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">HAYIR</button>
+                </div>
+            </div>
+
+            <div style="background:#1a1a1a; padding:15px; border-radius:15px;">
+                <p style="font-size:11px; color:var(--primary); font-weight:900; margin-bottom:10px;">1. EL FENERİNİ ALDIN MI?</p>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="checkEq('fener', true)" id="fenerEvet" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">EVET</button>
+                    <button onclick="checkEq('fener', false)" id="fenerHayir" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">HAYIR</button>
+                </div>
+            </div>
+
+            <div style="background:#1a1a1a; padding:15px; border-radius:15px;">
+                <p style="font-size:10px; color:var(--primary); font-weight:900; margin-bottom:10px;">2. REFLEKTÖR YELEĞİNİ GİYDİN Mİ?</p>
+                <div style="display:flex; gap:10px;">
+                    <button onclick="checkEq('yelek', true)" id="yelekEvet" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">EVET</button>
+                    <button onclick="checkEq('yelek', false)" id="yelekHayir" style="flex:1; padding:10px; border-radius:10px; border:1px solid #444; background:none; color:#fff; font-weight:bold; font-size:12px;">HAYIR</button>
+                </div>
+            </div>
+        </div>
+
+        <button id="finalStartBtn" style="width:100%; background:var(--primary); color:#000; border:none; padding:18px; border-radius:20px; font-weight:900; margin-top:20px; opacity:0.3; pointer-events:none; transition: 0.3s;">DEVRİYEYİ BAŞLAT</button>
+        <button onclick="document.getElementById('equipmentModal').style.display='none'" style="margin-top:15px; background:none; border:none; color:#666; font-size:12px; cursor:pointer;">İPTAL</button>
+    </div>
+</div>
+<script type="module">
+  import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { getDatabase, ref, get, set, update, onValue, push } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+// MERKEZ VERİTABANI BAĞLANTISI
+const merkezConfig = {
+    apiKey: "AIzaSyDCJWz80wWlzNhaM2Qnw_e5UkQoc8DoJaU",
+    authDomain: "merkez-14bf8.firebaseapp.com",
+    projectId: "merkez-14bf8",
+    databaseURL: "https://merkez-14bf8-default-rtdb.firebaseio.com"
+};
+const merkezApp = getApps().find(a => a.name === "merkezApp") || initializeApp(merkezConfig, "merkezApp");
+const merkezDb = getDatabase(merkezApp);
+// --- AES ŞİFRE ÇÖZÜCÜ ---
+const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
+const decryptData = (encrypted) => {
+    try {
+        const bytes = CryptoJS.AES.decrypt(encrypted, CONFIG_KEY);
+        const dec = bytes.toString(CryptoJS.enc.Utf8);
+        return dec ? JSON.parse(dec) : null;
+    } catch (e) { return null; }
+};
+
+    const currentUser = JSON.parse(sessionStorage.getItem('currentUser'));
+const siteID = localStorage.getItem("siteID");
+const siteConfigStr = localStorage.getItem("siteConfig");
+const siteConfig = decryptData(siteConfigStr); // Şifreli veriyi çözüyoruz
+
+// Eğer kullanıcı yoksa veya şifre çözülemezse kapı dışarı
+if (!currentUser || !siteID || !siteConfig) { 
+    window.location.href = "index.html"; 
+}
+
+let app;
+try {
+    app = getApps().find(a => a.name === `siteApp-${siteID}`) || initializeApp(siteConfig, `siteApp-${siteID}`);
+} catch (e) {
+    app = getApps().find(a => a.name === `siteApp-${siteID}`);
+}    const db = getDatabase(app);
+	const auth = getAuth(app);
+
+// --- KESİN OTURUM KORUMASI ---
+onAuthStateChanged(auth, (user) => {
+    if (!user) {
+        // Oturum yoksa veya düşmüşse direkt kapı dışarı
+        window.location.href = "index.html";
+    } else {
+        console.log("Yetkili Giriş:", user.uid);
+        // Oturum geçerliyse sayfayı hazırla
+        init(); 
+    }
+});
+
+    const OFFLINE_STORAGE_KEY = `patrol_data_${currentUser.username}`;
+    const OUTBOX_STORAGE_KEY = `patrol_outbox_${currentUser.username}`;
+
+    const activeDevriyeRef = ref(db, `activeDevriye/${currentUser.username}`);
+    const nobetRef = ref(db, 'nobetRecords');
+
+    let devriyeStarted = false;
+	// eqStatus tanımını bul ve bununla değiştir:
+let eqStatus = { gps: null, fener: null, yelek: null };
+    let startTime = null;
+    let readPoints = [];
+    let qrScanner = null;
+    let currentBlock = "BÖLGE";
+    let isFlashOn = false;
+    let bestLocation = null;
+    let watchId = null;
+	let countdownInterval = null;
+
+    window.showAppModal = (title, text, icon = "info") => {
+        document.getElementById('appModalTitle').innerText = title;
+        document.getElementById('appModalText').innerText = text;
+        document.getElementById('appModalIcon').innerText = icon;
+        document.getElementById('appModal').style.display = 'flex';
+    };
+    window.closeAppModal = () => { document.getElementById('appModal').style.display = 'none'; };
+
+function checkConnectivity() {
+        const bar = document.getElementById('offlineAlertBar');
+        if (navigator.onLine) { 
+            bar.style.display = 'none'; 
+            // İNTERNET GELDİĞİNDE: Eğer devriye açıksa yereldeki noktaları Firebase'e fırlat
+            if (devriyeStarted && readPoints.length > 0) {
+                update(activeDevriyeRef, { 
+                    startTime: startTime.toISOString(),
+                    readPoints: readPoints 
+                }).then(() => console.log("Bağlantı geldi, aktif veriler Firebase ile eşlendi."));
+            }
+        } else { 
+            bar.style.display = 'block'; 
+        }
+    }
+    window.addEventListener('online', () => { checkConnectivity(); syncOutbox(); });
+    window.addEventListener('offline', checkConnectivity);
+window.checkEq = (tip, cevap) => {
+    eqStatus[tip] = cevap;
+    const evetBtn = document.getElementById(tip + 'Evet');
+    const hayirBtn = document.getElementById(tip + 'Hayir');
+
+    if(cevap) {
+        evetBtn.style.background = "var(--primary)"; evetBtn.style.color = "#000";
+        hayirBtn.style.background = "none"; hayirBtn.style.color = "#fff";
+    } else {
+        hayirBtn.style.background = "#ff3b30"; hayirBtn.style.color = "#fff";
+        evetBtn.style.background = "none"; evetBtn.style.color = "#fff";
+    }
+
+    // 3 Soru da işaretlendi mi?
+    const allAnswered = eqStatus.gps !== null && eqStatus.fener !== null && eqStatus.yelek !== null;
+    
+    if(allAnswered) {
+        const btn = document.getElementById('finalStartBtn');
+        btn.style.opacity = "1";
+        btn.style.pointerEvents = "auto";
+    }
+};
+async function init() {
+    checkConnectivity();
+    
+    // KRİTİK: Sayfa açıldığında internet varsa önce bekleyen verileri senkronize et
+    if (navigator.onLine) {
+        await syncOutbox();
+    }
+
+    const savedData = localStorage.getItem(OFFLINE_STORAGE_KEY);
+    
+    if (savedData) {
+        // Öncelik yerel veride (Telefon hafızası kraldır)
+        const data = JSON.parse(savedData);
+        startTime = new Date(data.startTime);
+        readPoints = data.readPoints || [];
+        devriyeStarted = true;
+        uiStartMode();
+        startTimerLoop();
+        
+        // Yerel veriyi Firebase ile anında eşle (Eksik veri ezilmesini önler)
+        if(navigator.onLine) {
+            update(activeDevriyeRef, { 
+                startTime: startTime.toISOString(), 
+                readPoints: readPoints 
+            }).catch(e => console.log("İlk yükleme senkron hatası"));
+        }
+    } else {
+        // Telefonda hiç kayıt yoksa Firebase'den çek
+        const snap = await get(activeDevriyeRef);
+        if (snap.exists()) {
+            const cloudData = snap.val();
+            startTime = new Date(cloudData.startTime);
+            readPoints = cloudData.readPoints || [];
+            devriyeStarted = true;
+            saveToLocal();
+            uiStartMode();
+            startTimerLoop();
+        } else {
+            devriyeStarted = false;
+            uiReadyMode();
+        }
+    }
+    loadQRInterface();
+}
+    function saveToLocal() {
+        localStorage.setItem(OFFLINE_STORAGE_KEY, JSON.stringify({
+            startTime: startTime ? startTime.toISOString() : null,
+            readPoints: readPoints
+        }));
+    }
+document.getElementById('backHomeBtn').onclick = () => {
+    window.location.href = "guvenlik.html";
+};
+function uiStartMode() {
+    document.getElementById('backHomeBtn').style.display = "none"; // Devriye başladı, geri dönme
+    document.getElementById('startBtn').style.display = "none";
+    document.getElementById('endBtn').style.display = "block";
+    document.getElementById('incidentBtn').style.display = "flex"; 
+    document.getElementById('statusLabel').innerText = "AKTİF DEVRİYE";
+    }
+function uiReadyMode() {
+    document.getElementById('backHomeBtn').style.display = "block"; // Devriye yok, geri dönebilir
+    document.getElementById('startBtn').style.display = "block";
+    document.getElementById('endBtn').style.display = "none";
+    document.getElementById('incidentBtn').style.display = "none"; 
+    document.getElementById('statusLabel').innerText = "HAZIR";
+    document.getElementById('timerDisplay').innerText = "00:00:00";
+}
+
+async function loadQRInterface() {
+        try {
+            // 1. Önce Mevcut Bloğu Tespit Et
+            if(navigator.onLine) {
+                const nSnap = await get(nobetRef);
+                if (nSnap.exists()) {
+                    // Kullanıcının aktif nöbetini bul
+                    const active = Object.values(nSnap.val()).find(r => 
+                        (r.startBy === currentUser.name || r.startBy === currentUser.username) && 
+                        r.status === 'started'
+                    );
+                    if (active && active.startPoint) {
+                        currentBlock = active.startPoint.trim();
+                    }
+                }
+            }
+
+            // Eğer hala "BÖLGE" ise ve liste gelmiyorsa, ilk yükleme için varsayılanı düzelt
+            document.getElementById('routeName').innerText = currentBlock.toUpperCase() + " ÇEVRESİ";
+
+            // 2. Cache Anahtarlarını Blok İsmi Belirlendikten Sonra Tanımla
+            const CACHE_KEY = `qr_cache_${currentBlock}`;
+            const VERSION_KEY = `qr_version_${currentBlock}`;
+
+            // 3. KOTA DOSTU AKILLI ÇEKİM
+            let localVersion = localStorage.getItem(VERSION_KEY) || "0";
+            let remoteVersion = localVersion;
+
+            if (navigator.onLine) {
+                const vSnap = await get(ref(db, `versions/${currentBlock}`));
+                remoteVersion = vSnap.exists() ? String(vSnap.val()) : "1";
+            }
+
+            const cachedQR = localStorage.getItem(CACHE_KEY);
+            let qrData = null;
+
+            if (localVersion === remoteVersion && cachedQR) {
+                qrData = JSON.parse(cachedQR);
+            } else if (navigator.onLine) {
+                // Burada `${currentBlock}qrcodes` yapısına bakıyor
+                const qrSnap = await get(ref(db, `${currentBlock}qrcodes`));
+                if (qrSnap.exists()) {
+                    qrData = qrSnap.val();
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(qrData));
+                    localStorage.setItem(VERSION_KEY, remoteVersion);
+                }
+            }
+
+            // 4. Arayüzü Çiz
+            const container = document.getElementById('qrListContainer');
+            container.innerHTML = ''; // Temizle
+
+            if (qrData) {
+                const points = Object.values(qrData);
+                refreshStats(points.length);
+                points.forEach(point => {
+                    const isRead = readPoints.some(rp => rp.name.trim().toLocaleLowerCase('tr-TR') === point.name.trim().toLocaleLowerCase('tr-TR'));
+                    const div = document.createElement('div');
+                    div.className = 'qr-card';
+                    div.innerHTML = `
+                        <div class="qr-icon-side" style="${isRead ? 'background:#2ecc71' : ''}">
+                            <span class="material-symbols-outlined">${isRead ? 'verified' : 'qr_code_scanner'}</span>
+                        </div>
+                        <div class="qr-info">
+                            <h3>${point.name}</h3>
+                            <p class="${isRead ? 'completed' : 'waiting'}">${isRead ? 'NOKTA DOĞRULANDI' : 'TARAMA BEKLENİYOR...'}</p>
+                        </div>
+                    `;
+
+                    div.onclick = () => { 
+                        const suAnOkunmusMu = readPoints.some(rp => rp.name.trim().toLocaleLowerCase('tr-TR') === point.name.trim().toLocaleLowerCase('tr-TR'));
+                        if(suAnOkunmusMu) { 
+                            showAppModal("TAMAMLANDI", "Bu noktayı zaten başarıyla doğruladınız.", "verified"); 
+                            return; 
+                        }
+                        if(devriyeStarted) {
+                            openQRScanner(point.qrId, point.name); 
+                        } else {
+                            showAppModal("UYARI", "Önce devriyeyi başlatmalısınız!", "play_circle");
+                        }
+                    };
+                    container.appendChild(div);
+                });
+            } else {
+                container.innerHTML = `<div style="color:#888; text-align:center; padding:20px;">Bu bölgeye ait nokta bulunamadı (${currentBlock})</div>`;
+            }
+        } catch (e) { 
+            console.error("Arayüz yükleme hatası:", e); 
+        }
+    }
+    function refreshStats(totalCount = null) {
+        const total = totalCount || document.querySelectorAll('.qr-card').length;
+        const current = readPoints.length;
+        const percent = total > 0 ? Math.round((current / total) * 100) : 0;
+        document.getElementById('percentText').innerText = `%${percent} TAMAMLANDI`;
+        document.getElementById('counterDisplay').innerText = `${current}/${total}`;
+    }
+function updateUIVisually(pointName) {
+    const cards = document.querySelectorAll('.qr-card');
+    cards.forEach(card => {
+        // Karttaki ismi ve gelen ismi her türlü boşluktan temizleyip küçük harfe çeviriyoruz
+       const kartIsmi = card.querySelector('h3').innerText.trim().toLocaleLowerCase('tr-TR');
+const gelenIsim = pointName.trim().toLocaleLowerCase('tr-TR');
+
+        if(kartIsmi === gelenIsim) {
+            // EŞLEŞME TAMAM: Şimdi kartı yeşile boya
+            card.querySelector('.qr-icon-side').style.background = '#2ecc71';
+            card.querySelector('.material-symbols-outlined').innerText = 'verified';
+            const p = card.querySelector('.qr-info p');
+            p.innerText = 'NOKTA DOĞRULANDI';
+            p.className = 'completed';
+            
+            // Kartın tekrar tıklanmasını burada da engelle
+            card.onclick = () => { 
+                showAppModal("TAMAMLANDI", "Bu noktayı zaten başarıyla doğruladınız.", "verified"); 
+            };
+            card.style.cursor = "default";
+        }
+    });
+    refreshStats();
+}
+
+  // Önce Modal'ı Açan Buton
+document.getElementById('startBtn').onclick = () => {
+    if(!navigator.onLine) { showAppModal("BAĞLANTI HATASI", "Devriyeyi başlatmak için internet şart!", "signal_wifi_off"); return; }
+    document.getElementById('equipmentModal').style.display = 'flex';
+};
+
+// Modaldaki Gerçek Başlatma Butonu
+document.getElementById('finalStartBtn').onclick = async () => {
+    // 3'ü de EVET mi?
+    if(eqStatus.gps === true && eqStatus.fener === true && eqStatus.yelek === true) {
+        document.getElementById('equipmentModal').style.display = 'none';
+        
+        // Devriye Başlatma Kodların Buradan Devam Eder
+        startTime = new Date();
+        devriyeStarted = true;
+        readPoints = [];
+        saveToLocal();
+        uiStartMode();
+        startTimerLoop();
+        loadQRInterface();
+        set(activeDevriyeRef, { 
+            startTime: startTime.toISOString(), 
+            readPoints: [],
+            equipment: eqStatus 
+        });
+    } else {
+        document.getElementById('equipmentModal').style.display = 'none';
+        showAppModal("EKSİK KONTROL", "GPS, Fener ve Yelek onayı olmadan devriye başlatılamaz!", "warning");
+        
+        // Resetleme (Opsiyonel)
+        eqStatus = { gps: null, fener: null, yelek: null };
+        ["gps", "fener", "yelek"].forEach(t => {
+            document.getElementById(t+'Evet').style.background = "none";
+            document.getElementById(t+'Evet').style.color = "#fff";
+            document.getElementById(t+'Hayir').style.background = "none";
+            document.getElementById(t+'Hayir').style.color = "#fff";
+        });
+        document.getElementById('finalStartBtn').style.opacity = "0.3";
+        document.getElementById('finalStartBtn').style.pointerEvents = "none";
+    }
+};
+
+    // --- QR TARAYICI VE HATA YÖNETİMİ ---
+    async function openQRScanner(targetId, pointName) {
+        document.getElementById('qrScannerModal').style.display = 'flex';
+        qrScanner = new Html5Qrcode("reader");
+        
+        try {
+            await qrScanner.start({ facingMode: "environment" }, { fps: 20, qrbox: 250 }, async (txt) => {
+                if (txt.trim() === targetId) {
+                    await closeScanner(); // Başarılıysa kapat
+                    launchSecurityOverlay(pointName);
+                } else {
+                    // YANLIŞ QR: Kamerayı kapat ve hata ver
+                    await closeScanner();
+                    showAppModal("YANLIŞ NOKTA", `Okuttuğunuz kod bu noktaya (${pointName}) ait değil!`, "cancel");
+                }
+            });
+        } catch (e) { showAppModal("HATA", "Kamera başlatılamadı."); }
+
+        document.getElementById('flashBtn').onclick = async () => {
+            isFlashOn = !isFlashOn;
+            try { await qrScanner.applyVideoConstraints({ advanced: [{ torch: isFlashOn }] }); } catch(e){}
+        };
+    }
+
+    window.closeScanner = async () => {
+        if (qrScanner) {
+            try { await qrScanner.stop(); } catch(e){}
+            qrScanner = null;
+        }
+        document.getElementById('qrScannerModal').style.display = 'none';
+        isFlashOn = false;
+    };
+
+function launchSecurityOverlay(name) {
+    const overlay = document.getElementById('securityOverlay');
+    const num = document.getElementById('countdownNumber');
+    overlay.style.display = 'flex';
+    
+    // --- SIFIRLAMA TİMİ: Eskiden kalma sayaç veya GPS varsa öldür ---
+    if (countdownInterval) clearInterval(countdownInterval);
+    if (watchId) navigator.geolocation.clearWatch(watchId);
+
+    let left = 10; // Her zaman jilet gibi 10'dan başlar
+    num.innerText = left;
+    bestLocation = null;
+
+    // GPS İzlemeyi Başlat (Senin Orijinal Mantığın - Dokunulmadı)
+    watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+            const acc = pos.coords.accuracy;
+            if (!bestLocation || acc < bestLocation.acc) {
+                bestLocation = { 
+                    lat: pos.coords.latitude, 
+                    lng: pos.coords.longitude, 
+                    acc: acc 
+                };
+                console.log(`Sinyal yakalandı: ${acc.toFixed(1)}m`);
+                
+                // Senin Elite Dokunuşun: 10m altıysa bekletme hemen bitir
+                if (acc <= 10) {
+                    finalizeGpsSearch(name); 
+                }
+            }
+        },
+        (e) => console.warn("GPS Hatası:", e.message),
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 }
+    );
+
+    // Yeni Sayacı Başlat ve Global Değişkene Atla
+    countdownInterval = setInterval(() => {
+        left--; 
+        num.innerText = left;
+        if (left <= 0) {
+            finalizeGpsSearch(name);
+        }
+    }, 1000);
+}
+
+function finalizeGpsSearch(name) {
+    // NOKTA BİTTİĞİ AN HER ŞEYİ DURDUR (Hayalet sayaçları bitiren kısım)
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+    if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+    }
+
+    document.getElementById('securityOverlay').style.display = 'none';
+    
+    if (bestLocation) {
+        pushPoint(name, bestLocation.lat, bestLocation.lng, bestLocation.acc);
+    } else {
+        saveFinalAttempt(name);
+    }
+}
+    function saveFinalAttempt(name) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => pushPoint(name, pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy),
+            () => pushPoint(name, 0, 0, 0),
+            { enableHighAccuracy: true, timeout: 3000 }
+        );
+    }
+
+function pushPoint(name, lat, lng, acc) {
+        if (!readPoints.some(p => p.name === name)) {
+            // Diziyi güncelle
+// Artık her noktayı hangi blokta okuttuğunu da kaydediyoruz
+readPoints.push({ 
+    block: currentBlock, 
+    name: name, 
+    time: new Date().toLocaleTimeString('tr-TR'), 
+    lat, lng, acc 
+});            
+            // UI'ı güncelle ve telefona hemen kaydet
+            updateUIVisually(name);
+            saveToLocal();
+            
+            // CANLI SENKRONİZASYON: İnternet varsa anında bulutu güncelle
+            if(navigator.onLine) {
+                update(activeDevriyeRef, { 
+                    startTime: startTime.toISOString(),
+                    readPoints: readPoints 
+                }).catch(e => console.log("Anlık bulut güncelleme hatası."));
+            }
+        }
+    }
+
+    function startTimerLoop() {
+        const timerInt = setInterval(() => {
+            if(!devriyeStarted) { clearInterval(timerInt); return; }
+            const diff = Math.floor((new Date() - startTime) / 1000);
+            const h = String(Math.floor(diff / 3600)).padStart(2, '0');
+            const m = String(Math.floor((diff % 3600) / 60)).padStart(2, '0');
+            const s = String(diff % 60).padStart(2, '0');
+            document.getElementById('timerDisplay').innerText = `${h}:${m}:${s}`;
+        }, 1000);
+    }
+
+let isFinalizing = false; 
+
+    document.getElementById('endBtn').onclick = () => {
+        if (isFinalizing) return; 
+        if (!navigator.onLine) { showAppModal("İŞLEM ENGELLENDİ", "İnternet yokken devriye bitirilemez!", "cloud_off"); return; }
+        
+        const allCards = document.querySelectorAll('.qr-card');
+        const eksikNoktalar = [];
+        
+     allCards.forEach(card => {
+    // Karttaki başlığı al ve boşlukları temizle
+    const karttakiHamIsim = card.querySelector('h3').innerText.trim();
+    
+    // TÜRKÇE UYUMLU KONTROL: okunanlarda bu isim var mı?
+    const okutulduMu = readPoints.some(rp => 
+        rp.name.trim().toLocaleLowerCase('tr-TR') === karttakiHamIsim.toLocaleLowerCase('tr-TR')
+    );
+
+    if (!okutulduMu) {
+        eksikNoktalar.push(karttakiHamIsim);
+    }
+});
+
+        if (eksikNoktalar.length > 0) {
+            document.getElementById('confirmModal').style.display = 'flex';
+            const noteArea = document.getElementById('incidentNote');
+            const submitBtn = document.getElementById('forceFinishBtn');
+            const warning = document.getElementById('charWarning');
+            
+            noteArea.oninput = () => {
+                const len = noteArea.value.trim().length;
+                if(len >= 15) {
+                    submitBtn.disabled = false;
+                    warning.innerText = "Yeterli açıklama yazıldı ✓";
+                    warning.style.color = "var(--primary)";
+                } else {
+                    submitBtn.disabled = true;
+                    warning.innerText = `En az ${15 - len} karakter daha...`;
+                    warning.style.color = "#ff3b30";
+                }
+            };
+
+            submitBtn.onclick = async () => {
+                if (isFinalizing) return;
+                isFinalizing = true; 
+                submitBtn.disabled = true;
+                submitBtn.style.pointerEvents = "none";
+                submitBtn.style.opacity = "0.4";
+                
+                const icon = document.getElementById('finishIcon');
+                const text = document.getElementById('finishText');
+                if(icon) { icon.innerText = "sync"; icon.style.animation = "pulse 1s infinite"; }
+                if(text) text.innerText = "ŞİRKETE GÖNDERİLİYOR...";
+
+                await finalizePatrol(noteArea.value, eksikNoktalar);
+            };
+        } else { 
+            // BURASI DEĞİŞTİ: TAM BİTİRİRKEN DE YAZI ÇIKACAK VE KİLİTLENECEK
+            isFinalizing = true; 
+            const eBtn = document.getElementById('endBtn');
+            eBtn.style.pointerEvents = "none";
+            eBtn.style.opacity = "0.5";
+            eBtn.innerText = "GÖNDERİLİYOR..."; // Personel bunu görecek
+
+            finalizePatrol("Eksiksiz tamamlandı.", []); 
+        }
+    };
+async function finalizePatrol(note = "", eksikListesi = []) {
+    try {
+        // İnternet kontrolü (Bitirirken internet şart)
+        if (!navigator.onLine) {
+            showAppModal("BAĞLANTI YOK", "İnternet bağlantısı olmadan devriye sonlandırılamaz!", "wifi_off");
+            isFinalizing = false;
+            const eBtn = document.getElementById('endBtn');
+            if(eBtn) { eBtn.innerText = "BİTİR"; eBtn.style.opacity = "1"; eBtn.style.pointerEvents = "auto"; }
+            return;
+        }
+
+        const referenceDate = startTime || new Date();
+        const yil = referenceDate.getFullYear();
+        const ay = String(referenceDate.getMonth() + 1).padStart(2, '0');
+        const gun = String(referenceDate.getDate()).padStart(2, '0');
+        const dinamikDateKey = `${yil}-${ay}-${gun}`; 
+
+        const log = {
+            user: currentUser.username,
+            name: currentUser.name || currentUser.username,
+            bolge: currentBlock,
+            start: startTime.toLocaleTimeString('tr-TR'),
+            end: new Date().toLocaleTimeString('tr-TR'),
+            points: readPoints,
+            missedPoints: eksikListesi, 
+            ekipmanlar: eqStatus, 
+            status: eksikListesi.length > 0 ? "Eksik Devriye" : "TAM DEVRİYE",
+            eksikNotu: note,
+            okunanSayi: readPoints.length,
+            toplamNokta: document.querySelectorAll('.qr-card').length,
+            timestamp: Date.now(),
+            dateKey: dinamikDateKey
+        };
+
+        // 1. Önce veriyi outbox'a (giden kutusu) ekle
+        let outbox = JSON.parse(localStorage.getItem(OUTBOX_STORAGE_KEY) || "[]");
+        outbox.push(log);
+        localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(outbox));
+
+        // 2. Senkronizasyonu başlat
+        await syncOutbox();
+
+        // 3. Başarılıysa her şeyi temizle
+        localStorage.removeItem(OFFLINE_STORAGE_KEY);
+        await set(activeDevriyeRef, null); 
+        
+        if (eksikListesi.length > 0) {
+            await set(ref(merkezDb, "sites/" + siteID + "/hasMissingPatrol"), true);
+        }
+
+        showAppModal("BAŞARILI", "Rapor merkeze iletildi.", "check_circle");
+        setTimeout(() => { window.location.href = "guvenlik.html"; }, 2000);
+
+    } catch (error) {
+        console.error("Kritik Hata:", error);
+        isFinalizing = false; // KİLİDİ AÇIYORUZ: Personel tekrar deneyebilsin
+        const submitBtn = document.getElementById('forceFinishBtn');
+        const endBtn = document.getElementById('endBtn');
+        if(submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = "1"; submitBtn.style.pointerEvents = "auto"; }
+        if(endBtn) { endBtn.innerText = "BİTİR"; endBtn.style.opacity = "1"; endBtn.style.pointerEvents = "auto"; }
+        showAppModal("HATA", "Gönderilemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin.", "error");
+    }
+}
+async function syncOutbox() {
+    if (!navigator.onLine) return;
+    let outbox = JSON.parse(localStorage.getItem(OUTBOX_STORAGE_KEY) || "[]");
+    if (outbox.length === 0) return;
+
+    const remainingOutbox = [];
+    for (const log of outbox) {
+        try {
+            await push(ref(db, `devriyeHistory/${log.dateKey}/${log.user}`), log);
+        } catch (e) {
+            console.error("Senkron hatası:", e);
+            remainingOutbox.push(log); // Gönderilemeyeni tut
+        }
+    }
+    localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(remainingOutbox));
+}
+// 1. SEÇ BUTONU YETKİ KONTROLÜ (Aynen Korundu)
+onValue(ref(db, 'settings/allowPointChange'), (snap) => {
+    const badge = document.getElementById('eliteSelectBadge');
+    if (snap.exists() && snap.val() === true) {
+        badge.style.display = 'block';
+    } else {
+        badge.style.display = 'none';
+    }
+});
+
+// 2. KOTA DOSTU BLOK LİSTELEME MANTIĞI
+window.openBlockModal = async () => {
+    if(!navigator.onLine) { showAppModal("BAĞLANTI YOK", "Blok değiştirmek için internet lazım.", "wifi_off"); return; }
+    
+    const modal = document.getElementById('blockSelectModal');
+    const area = document.getElementById('blockListArea');
+    modal.style.display = 'flex';
+    area.innerHTML = `<div style="color:#fff; padding:20px; text-align:center;">LİSTE ÇEKİLİYOR...</div>`;
+
+    try {
+        // KRİTİK: rootSnap (Tüm DB) yerine sadece noktaListe'yi çekiyoruz
+        const listSnap = await get(ref(db, 'noktaListe'));
+        
+        if (listSnap.exists()) {
+            area.innerHTML = "";
+            const blocks = listSnap.val(); // Resmindeki { "eee": true } yapısı
+
+            Object.keys(blocks).forEach(b => {
+                if(blocks[b] === true) {
+                    const btn = document.createElement('button');
+                    // Orijinal stilini koruduk
+                    btn.style.cssText = "background:#222; color:#fff; border:1.5px solid var(--border); padding:18px; border-radius:20px; font-weight:900; font-size:13px; text-transform:uppercase; margin:5px;";
+                    btn.innerText = b;
+
+                    btn.onclick = async () => {
+                        const nSnap = await get(nobetRef);
+                        const activeKey = Object.keys(nSnap.val() || {}).find(k => 
+                            nSnap.val()[k].startBy === (currentUser.name || currentUser.username) && 
+                            nSnap.val()[k].status === 'started'
+                        );
+
+                        if (activeKey) {
+                            // KRİTİK: 'b' değerini olduğu gibi gönderiyoruz (Büyük/Küçük harf hatası olmaması için)
+                            // Eğer veritabanında "eee" ise, startPoint "eee" olur. 
+                            // Sayfa yenilenince loadQRInterface de "eeeqrcodes"u hatasız bulur.
+                            await update(ref(db, `nobetRecords/${activeKey}`), { 
+                                startPoint: b 
+                            });
+                            
+                            location.reload(); 
+                        }
+                    };
+                    area.appendChild(btn);
+                }
+            });
+        } else {
+            area.innerHTML = `<div style="color:#fff; padding:20px;">LİSTE BOŞ</div>`;
+        }
+    } catch(e) {
+        console.error("Hata:", e);
+        area.innerHTML = "Hata oluştu!";
+    }
+};
+
+document.getElementById('incidentBtn').onclick = () => {
+    window.location.href = "olay.html";
+};
+</script>
+</body>
+</html>

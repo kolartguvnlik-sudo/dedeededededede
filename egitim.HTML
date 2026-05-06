@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CGA - Personel Eğitim Paneli</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #f1c40f;
+            --bg: #0a0a0a;
+            --card-bg: #161616;
+            --text: #ffffff;
+        }
+        body { margin:0; font-family:'Montserrat', sans-serif; background: var(--bg); color: var(--text); padding-bottom: 50px; }
+        
+        /* Üst Header */
+        .header { 
+            background: linear-gradient(to bottom, #1a1a1a, #0a0a0a); 
+            padding: 20px; 
+            text-align: center; 
+            border-bottom: 1px solid #333; 
+            position: sticky; 
+            top: 0; 
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Geri Butonu */
+        .back-btn {
+            position: absolute;
+            left: 15px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid #333;
+            color: var(--primary);
+            padding: 8px 12px;
+            border-radius: 10px;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: 0.3s;
+        }
+        .back-btn:active { transform: scale(0.9); }
+
+        .header-titles h1 { margin: 0; font-size: 18px; letter-spacing: 1px; color: var(--primary); text-transform: uppercase; }
+        .header-titles p { margin: 2px 0 0; font-size: 11px; color: #888; }
+
+        /* Eğitim Listesi */
+        .container { padding: 15px; max-width: 600px; margin: auto; }
+        .edu-card { background: var(--card-bg); border-radius: 18px; padding: 20px; margin-bottom: 15px; border: 1px solid #222; position: relative; overflow: hidden; transition: 0.3s; }
+        .edu-card:active { transform: scale(0.98); background: #1f1f1f; }
+        
+        .cat-badge { position: absolute; top: 0; right: 0; padding: 6px 12px; font-size: 10px; font-weight: bold; border-bottom-left-radius: 15px; text-transform: uppercase; }
+        .cat-genel { background: #3498db; }
+        .cat-prosedur { background: #9b59b6; }
+        .cat-teknik { background: #e67e22; }
+        .cat-acil { background: #e74c3c; }
+
+        .edu-title { font-size: 17px; font-weight: bold; margin-bottom: 8px; color: #eee; display: block; }
+        .edu-desc { font-size: 13px; color: #aaa; line-height: 1.5; margin-bottom: 15px; }
+        
+        .view-btn { width: 100%; padding: 12px; border-radius: 10px; border: none; background: #222; color: var(--primary); font-weight: bold; font-size: 14px; cursor: pointer; border: 1px solid var(--primary); transition: 0.3s; }
+
+        /* Modal (İçerik Görüntüleyici) */
+        #contentModal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #000; z-index: 9999; }
+        .modal-header { height: 60px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: #111; border-bottom: 1px solid #333; }
+        .close-btn { color: #fff; font-size: 24px; cursor: pointer; }
+        #modalFrame { width: 100%; height: calc(100% - 60px); border: none; }
+        #videoContainer { width: 100%; height: calc(100% - 60px); display: flex; align-items: center; justify-content: center; }
+
+        .no-data { text-align: center; padding: 50px; color: #555; }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <a href="guvenlik.html" class="back-btn">
+        <i class="fas fa-chevron-left"></i> Geri
+    </a>
+    <div class="header-titles">
+        <h1>Eğitim Paneli</h1>
+        <p>CGA Güvenlik Gelişim Merkezi</p>
+    </div>
+</div>
+
+<div class="container" id="eduContainer">
+    <div class="no-data">Eğitimler yükleniyor...</div>
+</div>
+
+<div id="contentModal">
+    <div class="modal-header">
+        <span id="modalTitle" style="font-weight: bold; color: #f1c40f;">Eğitim İçeriği</span>
+        <span class="close-btn" onclick="closeModal()">✖</span>
+    </div>
+    <iframe id="modalFrame" src="" style="display:none;"></iframe>
+    <div id="videoContainer" style="display:none;"></div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyBWu01alJKdnEvhs_bumDCxgGO9m-BX5Y0",
+        authDomain: "merkezprojecga.firebaseapp.com",
+        databaseURL: "https://merkezprojecga-default-rtdb.firebaseio.com",
+        projectId: "merkezprojecga",
+        storageBucket: "merkezprojecga.firebasestorage.app",
+        messagingSenderId: "4183440370",
+        appId: "1:4183440370:web:c83e65bbc6c1724a3a896b"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const eduContainer = document.getElementById("eduContainer");
+
+    onValue(ref(db, "educations"), (snap) => {
+        eduContainer.innerHTML = "";
+        const data = snap.val();
+        
+        if(!data) {
+            eduContainer.innerHTML = '<div class="no-data">Henüz yayınlanmış bir eğitim bulunmuyor.</div>';
+            return;
+        }
+
+        Object.entries(data).reverse().forEach(([key, edu]) => {
+            const card = document.createElement("div");
+            card.className = "edu-card";
+            card.innerHTML = `
+                <div class="cat-badge cat-${edu.category}">${edu.category}</div>
+                <span class="edu-title">${edu.title}</span>
+                <p class="edu-desc">${edu.desc || 'Bu eğitim içeriğini görüntülemek için tıklayın.'}</p>
+                <button class="view-btn" onclick="openEdu('${edu.url}', '${edu.title}')">EĞİTİMİ GÖRÜNTÜLE</button>
+            `;
+            eduContainer.appendChild(card);
+        });
+    });
+
+    window.openEdu = (url, title) => {
+        const modal = document.getElementById("contentModal");
+        const frame = document.getElementById("modalFrame");
+        const videoCont = document.getElementById("videoContainer");
+        const mTitle = document.getElementById("modalTitle");
+
+        mTitle.innerText = title;
+        modal.style.display = "block";
+        document.body.style.overflow = "hidden";
+
+        // YOUTUBE DÜZELTME (HATA 153 FİX)
+        if(url.includes("youtube.com") || url.includes("youtu.be")) {
+            let videoId = "";
+            if (url.includes("v=")) {
+                videoId = url.split("v=")[1].split("&")[0];
+            } else {
+                videoId = url.split("/").pop().split("?")[0];
+            }
+            
+            // Temiz ve hatasız embed formatı
+            const embedUrl = `https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1&showinfo=0`;
+            videoCont.innerHTML = `<iframe width="100%" height="100%" src="${embedUrl}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>`;
+            videoCont.style.display = "flex";
+            frame.style.display = "none";
+        } 
+        // DRIVE DÜZELTME
+        else if(url.includes("drive.google.com")) {
+            let driveUrl = url.replace(/\/view.*$/, "").replace(/\/edit.*$/, "") + "/preview";
+            frame.src = driveUrl;
+            frame.style.display = "block";
+            videoCont.style.display = "none";
+        }
+        else {
+            frame.src = url;
+            frame.style.display = "block";
+            videoCont.style.display = "none";
+        }
+    }
+
+    window.closeModal = () => {
+        const modal = document.getElementById("contentModal");
+        const frame = document.getElementById("modalFrame");
+        const videoCont = document.getElementById("videoContainer");
+        
+        modal.style.display = "none";
+        frame.src = "";
+        videoCont.innerHTML = "";
+        document.body.style.overflow = "auto";
+    }
+</script>
+
+</body>
+</html>

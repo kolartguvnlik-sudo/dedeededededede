@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CGA Akıllı Rehber - V3 PRO</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        :root { --primary: #D7F09D; --bg: #0c0c0c; --card: #181818; --star: #FFD700; --text-dim: #999; }
+        body { background: var(--bg); color: #fff; font-family: 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 15px; overflow-x: hidden; }
+        #syncStatus { font-size: 9px; color: #444; text-align: center; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 1.5px; }
+        .search-container { position: sticky; top: 0; z-index: 100; background: var(--bg); padding-bottom: 15px; }
+        .search-box { background: var(--card); padding: 5px; border-radius: 16px; border: 1px solid rgba(215,240,157,0.15); display: flex; align-items: center; box-shadow: 0 8px 25px rgba(0,0,0,0.4); }
+        input { flex: 1; padding: 14px; background: transparent; border: none; color: var(--primary); outline: none; font-weight: bold; font-size: 16px; }
+        .section-title { font-size: 11px; color: #555; text-transform: uppercase; margin: 20px 0 12px 5px; letter-spacing: 1.5px; display: flex; align-items: center; gap: 8px; font-weight: 700; }
+        .sakin-card { background: var(--card); padding: 18px; border-radius: 22px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border: 1px solid rgba(255,255,255,0.04); animation: slideUp 0.35s cubic-bezier(0.2, 0, 0.2, 1) forwards; transition: transform 0.2s, background 0.2s; position: relative; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .sakin-card:active { transform: scale(0.97); background: #222; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .vip-card { border: 1px solid rgba(255, 215, 0, 0.15); background: linear-gradient(135deg, #1d1d1d 0%, #252110 100%); }
+        .info { flex: 1; padding-right: 10px; }
+        .name { font-weight: 800; font-size: 16px; text-transform: uppercase; display: flex; align-items: center; gap: 8px; letter-spacing: 0.3px; color: #efefef; }
+        .badge-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+        .daire-badge { background: rgba(215, 240, 157, 0.08); color: var(--primary); padding: 4px 12px; border-radius: 10px; font-size: 12px; font-weight: 900; border: 1px solid rgba(215, 240, 157, 0.2); text-transform: uppercase; }
+        .vip-status-badge { background: rgba(255, 215, 0, 0.1); color: var(--star); padding: 4px 10px; border-radius: 10px; font-size: 10px; font-weight: 900; border: 1px solid rgba(255, 215, 0, 0.25); text-transform: uppercase; }
+        .status-text { font-size: 11px; color: #555; font-weight: 600; text-transform: uppercase; }
+        .note-box { font-size: 11px; color: #aaa; margin-top: 12px; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--primary); line-height: 1.4; font-style: italic; }
+        .call-btn { background: var(--primary); color: #000 !important; width: 52px; height: 52px; border-radius: 18px; display: flex; align-items: center; justify-content: center; text-decoration: none; box-shadow: 0 6px 15px rgba(215,240,157,0.2); transition: transform 0.2s; }
+        .call-btn:active { transform: scale(0.9); }
+        .vip-call { background: var(--star); box-shadow: 0 6px 15px rgba(255,215,0,0.25); }
+        #emptyState { text-align: center; color: #333; margin-top: 60px; font-weight: 600; }
+        #emptyState span { font-size: 56px; display: block; margin-bottom: 12px; opacity: 0.1; }
+    </style>
+</head>
+<body>
+
+    <div id="syncStatus">SİSTEM BAŞLATILIYOR...</div>
+
+    <div class="search-container">
+        <div class="search-box">
+            <span class="material-symbols-outlined" style="margin-left:14px; color:var(--primary)">search</span>
+            <input type="text" id="searchInput" placeholder="İsim veya Daire (Örn: A12)" oninput="debouncedSearch()">
+        </div>
+    </div>
+
+    <div id="vipSection">
+        <div class="section-title"><span class="material-symbols-outlined" style="font-size:16px; color:var(--star)">stars</span> YÖNETİM & ÖNEMLİ KİŞİLER</div>
+        <div id="vipList"></div>
+    </div>
+
+    <div id="searchSection" style="display:none;">
+        <div class="section-title"><span class="material-symbols-outlined" style="font-size:16px; color:var(--primary)">person_search</span> SORGULAMA SONUÇLARI</div>
+        <div id="searchList"></div>
+    </div>
+
+    <div id="emptyState">
+        <span class="material-symbols-outlined">shield_person</span>
+        <div>Rehber sorgulaması için yukarıyı kullanın</div>
+    </div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+    import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+
+    // --- GÜVENLİK KONTROLÜ (AES) ---
+    const SECURITY_CONFIG = {
+        KEY: "KOLART_SİSTEM_2026_CGA", // Senin elite anahtarın
+        PATH_VIP: "DP_VIP",
+        PATH_NORMAL: "DP_NORMAL",
+        PATH_TIME: "SYSTEM_CONTROL/lastUpdate"
+    };
+
+    const decryptAES = (data) => {
+        if(!data) return null;
+        try {
+            const bytes = CryptoJS.AES.decrypt(data, SECURITY_CONFIG.KEY);
+            const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+            return decrypted ? JSON.parse(decrypted) : null;
+        } catch (e) { return null; }
+    };
+
+    const encryptAES = (data) => {
+        return CryptoJS.AES.encrypt(JSON.stringify(data), SECURITY_CONFIG.KEY).toString();
+    };
+
+    // Firebase Config Çözme
+    const siteID = localStorage.getItem("siteID");
+    const encryptedConfig = localStorage.getItem("siteConfig");
+    const siteConfig = decryptAES(encryptedConfig);
+
+    // Kritik Güvenlik Bariyeri
+    if (!siteID || !siteConfig) {
+        localStorage.clear();
+        window.location.href = "index.html";
+    }
+
+    const app = initializeApp(siteConfig);
+    const db = getDatabase(app);
+
+    let allData = [];
+    let searchTimer;
+
+    async function init() {
+        const status = document.getElementById('syncStatus');
+        try {
+            const timeSnap = await get(ref(db, SECURITY_CONFIG.PATH_TIME));
+            const serverTime = timeSnap.exists() ? timeSnap.val() : 0;
+            const localTime = localStorage.getItem("lastSyncTime") || 0;
+
+            if (serverTime == localTime && localStorage.getItem("enc_data")) {
+                status.innerText = "⚡ SENKRONİZE (GÜVENLİ)";
+                decryptAndLoad();
+            } else {
+                status.innerText = "🔄 GÜNCEL LİSTE ŞİFRELENİYOR...";
+                await downloadAndEncrypt(serverTime);
+            }
+        } catch(e) { 
+            status.innerText = "⚠️ ÇEVRİMDIŞI (GÜVENLİ MOD)";
+            if(localStorage.getItem("enc_data")) decryptAndLoad();
+        }
+    }
+
+    async function downloadAndEncrypt(newTime) {
+        const [vSnap, nSnap] = await Promise.all([
+            get(ref(db, SECURITY_CONFIG.PATH_VIP)), 
+            get(ref(db, SECURITY_CONFIG.PATH_NORMAL))
+        ]);
+        
+        let all = [];
+        if(vSnap.exists()) Object.keys(vSnap.val()).forEach(k => all.push({k, ...vSnap.val()[k], v:1}));
+        if(nSnap.exists()) Object.keys(nSnap.val()).forEach(k => all.push({k, ...nSnap.val()[k], v:0}));
+
+        const encrypted = encryptAES(all);
+        localStorage.setItem("enc_data", encrypted);
+        localStorage.setItem("lastSyncTime", newTime);
+        allData = all;
+        renderVips();
+    }
+
+    function decryptAndLoad() {
+        const encrypted = localStorage.getItem("enc_data");
+        const decrypted = decryptAES(encrypted);
+        if(decrypted) {
+            allData = decrypted;
+            renderVips();
+        } else {
+            localStorage.clear();
+            location.reload();
+        }
+    }
+
+    function renderVips() {
+        const container = document.getElementById('vipList');
+        container.innerHTML = "";
+        const vips = allData.filter(x => x.v === 1);
+        vips.forEach(s => renderCard(container, s, true));
+    }
+
+    // Arama ve Render Fonksiyonları (Aynı Elite Mantıkla Devam)
+    window.debouncedSearch = () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => performSearch(), 300);
+    };
+
+    window.performSearch = () => {
+        let term = document.getElementById('searchInput').value.trim().toUpperCase();
+        const searchSection = document.getElementById('searchSection');
+        const vipSection = document.getElementById('vipSection');
+        const searchList = document.getElementById('searchList');
+        const emptyState = document.getElementById('emptyState');
+
+        if (term.length < 2) {
+            searchSection.style.display = "none";
+            vipSection.style.display = "block";
+            emptyState.style.display = "block";
+            return;
+        }
+
+        if (!term.includes("-")) {
+            term = term.replace(/^([A-ZÇĞİÖŞÜ]+)(\d+)$/i, "$1-$2");
+        }
+
+        emptyState.style.display = "none";
+        vipSection.style.display = "none";
+        searchSection.style.display = "block";
+        searchList.innerHTML = "";
+
+        const results = allData.filter(s => 
+            s.adSoyad.toUpperCase().includes(term) || 
+            (s.daireNo && s.daireNo.toUpperCase().includes(term)) || 
+            (s.not && s.not.toUpperCase().includes(term))
+        );
+
+        if (results.length === 0) {
+            searchList.innerHTML = "<div style='text-align:center; color:#444; margin-top:30px; font-size:12px; font-weight:bold;'>SONUÇ BULUNAMADI</div>";
+        } else {
+            results.sort((a,b) => b.v - a.v).forEach(s => renderCard(searchList, s, s.v === 1));
+        }
+    };
+
+    function renderCard(container, s, isVip) {
+        const card = document.createElement('div');
+        card.className = `sakin-card ${isVip ? 'vip-card' : ''}`;
+        let badgeSection = s.daireNo ? `<div class="daire-badge">${s.daireNo}</div>` : (isVip ? `<div class="vip-status-badge">YÖNETİM</div>` : `<div class="status-text">SİTE SAKİNİ</div>`);
+
+        card.innerHTML = `
+            <div class="info">
+                <div class="name">
+                    ${isVip ? '<span class="material-symbols-outlined" style="color:var(--star); font-size:20px;">stars</span>' : ''}
+                    ${s.adSoyad}
+                </div>
+                <div class="badge-row">${badgeSection}</div>
+                ${s.not ? `<div class="note-box">${s.not}</div>` : ''}
+            </div>
+            <a href="tel:${s.telefon}" class="call-btn ${isVip ? 'vip-call' : ''}">
+                <span class="material-symbols-outlined" style="font-size:28px;">call</span>
+            </a>
+        `;
+        container.appendChild(card);
+    }
+
+    init();
+</script>
+<script src="nav.js"></script>
+</body>
+</html>

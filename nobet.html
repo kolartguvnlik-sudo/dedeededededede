@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KOLART - Nöbet Takip Sistemi</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+    body { margin:0; font-family:'Montserrat', sans-serif; background: linear-gradient(135deg,#2c3e50,#34495e); color:#ecf0f1; display:flex; flex-direction:column; align-items:center; min-height:100vh; padding-top: 60px; /* Üstteki bant için yer açtık */ }
+    
+    /* --- SABİT KONUM UYARI BANDI --- */
+    .gps-warning-bar {
+        position: fixed; top: 0; left: 0; width: 100%; height: 50px;
+        background: #c0392b; color: #fff; z-index: 99999;
+        display: flex; align-items: center; justify-content: center;
+        font-weight: 900; font-size: 13px; letter-spacing: 1px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        border-bottom: 2px solid #f1c40f;
+        text-transform: uppercase;
+    }
+    .gps-warning-bar span { animation: blink-text 1.5s infinite; }
+    @keyframes blink-text { 0% {opacity: 1;} 50% {opacity: 0.4;} 100% {opacity: 1;} }
+
+    .container { max-width:600px; width:90%; background: rgba(0,0,0,0.85); padding:25px; border-radius:16px; margin-top:20px; box-shadow:0 10px 30px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); }
+    h1 { text-align:center; color: #2ecc71; text-transform: uppercase; letter-spacing: 2px; font-weight: 900; margin-bottom: 20px; }
+    
+    label { display:block; margin-top:15px; margin-bottom:8px; font-weight: 600; color: #bdc3c7; text-transform: uppercase; font-size: 12px; }
+    select { width:100%; padding:14px; border-radius:8px; border:none; font-size:15px; margin-bottom:10px; background:#fff; color:#333; font-weight: 700; appearance: none; }
+    
+    button { width:100%; padding:18px; border:none; border-radius:12px; margin-top:12px; font-weight:900; cursor:pointer; transition:0.3s; text-transform: uppercase; letter-spacing: 1px; }
+    #startBtn { background:#27ae60; color:#fff; box-shadow: 0 4px 15px rgba(39, 174, 96, 0.4); }
+    #deliverBtn { background:#c0392b; color:#fff; box-shadow: 0 4px 15px rgba(192, 57, 43, 0.4); }
+    
+    #timer { font-size:42px; text-align:center; margin:20px 0; font-weight: 900; color: #f1c40f; font-family: 'Courier New', monospace; text-shadow: 0 0 10px rgba(241, 196, 15, 0.3); }
+
+    /* QR ve Başarı Modalları */
+    #qrScannerModal, #successModal { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); z-index:100000; flex-direction:column; align-items:center; justify-content:center; padding:16px; }
+    #qr-reader { width:100%; max-width:450px; border: 2px solid #2ecc71; border-radius: 12px; overflow: hidden; }
+    #closeScanner, #thanksBtn { margin-top:20px; padding:15px 35px; border:none; border-radius:10px; background:#c0392b; color:#fff; font-weight:900; cursor:pointer; }
+    #thanksBtn { background: #27ae60; }
+
+    #backBtn { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); width: 60px; height: 60px; border-radius: 50%; border: none; background: #2980b9; color: #fff; font-weight: 900; cursor: pointer; z-index: 10001; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+/* --- MOBİL GARANTİLİ TAŞMAYAN KONUM BANDI --- */
+.gps-warning-bar {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 40px; /* Biraz daha zarif, ince band */
+    background: #000000; 
+    color: #b3b3b3; 
+    z-index: 99999;
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    text-transform: uppercase;
+    border-bottom: 1px solid #222;
+    padding: 0 5px; /* Kenar boşluğunu minimuma indirdik */
+    box-sizing: border-box;
+    overflow: hidden; /* Her ihtimale karşı taşmayı gizle */
+}
+
+.gps-warning-bar span {
+    font-weight: 900;
+    /* Fontu biraz daha küçülttük (Min: 9px, Max: 12px) */
+    font-size: clamp(9px, 3vw, 12px); 
+    letter-spacing: 0.3px; /* Harf arasını daralttık */
+    white-space: nowrap; 
+    display: flex;
+    align-items: center;
+}
+
+.warning-icon {
+    color: #f1c40f;
+    margin: 0 4px; /* Ünlem ile yazı arasını iyice daralttık */
+    font-size: 14px; /* Ünlemi de küçülttük */
+}
+/* --- SAYFA ALTI ORTALI GERİ BUTONU --- */
+#backBtn { 
+    position: fixed; 
+    bottom: 25px; /* Alttan biraz boşluk bıraktık */
+    left: 50%; 
+    transform: translateX(-50%); /* Tam ortalama sihri */
+    width: 160px; /* Biraz daha geniş, güven veren duruş */
+    height: 45px; 
+    border-radius: 10px; 
+    border: 1px solid rgba(255,255,255,0.15); 
+    background: rgba(26, 26, 26, 0.9); /* Saf siyah/gri cam efekti */
+    color: #bdc3c7; 
+    font-weight: 800; 
+    font-size: 13px;
+    letter-spacing: 2px;
+    cursor: pointer; 
+    z-index: 10001; 
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6); 
+    backdrop-filter: blur(8px); 
+    text-transform: uppercase;
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#backBtn:hover {
+    background: #e74c3c; /* Kolart kırmızısı */
+    color: #fff;
+    border-color: #ff4d4d;
+    width: 180px; /* Hafifçe genişleyerek tepki verir */
+    box-shadow: 0 0 20px rgba(231, 76, 60, 0.4);
+}
+
+#backBtn::before {
+    content: '❮'; /* Daha şık bir geri oku */
+    margin-right: 12px;
+    font-size: 14px;
+}
+/* Destek Personel Numara Modalı */
+#supportModal { 
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,0.95); 
+    z-index:100000; flex-direction:column; align-items:center; 
+    justify-content:center; padding:16px; 
+}
+.support-input { 
+    width: 100%; max-width: 300px; padding: 15px; border-radius: 10px; 
+    border: 2px solid #2ecc71; background: #1a1a1a; color: #fff; 
+    font-size: 18px; text-align: center; margin-top: 15px; outline: none; 
+}
+#saveSupportBtn { 
+    margin-top:20px; padding:15px 35px; border:none; border-radius:10px; 
+    background:#27ae60; color:#fff; font-weight:900; cursor:pointer; 
+}
+</style>
+</head>
+<body>
+
+<div class="gps-warning-bar">
+    <span class="warning-icon">⚠️</span>
+    <span>DİKKAT: KONUM SERVİSLERİNİZİ AÇIK TUTUNUZ!</span>
+    <span class="warning-icon">⚠️</span>
+</div>
+
+<div class="container">
+    <h1>KOLART GÜVENLİK</h1>
+
+    <div id="shiftSection">
+        <label>VARDIYA SEÇİMİ</label>
+        <select id="shiftSelect">
+            <option value="Gündüz">GÜNDÜZ VARDIYASI </option>
+            <option value="Gece">GECE VARDIYASI </option>
+        </select>
+        <label>NÖBETİ DEVRALDIĞINIZ PERSONEL</label>
+        <select id="securitySelect"></select>
+        <button id="startBtn">NÖBETİ DEVRAL (QR OKUT)</button>
+    </div>
+	<div id="supportModal">
+    <h2 style="color: #f1c40f; text-align: center;">DESTEK PERSONEL GİRİŞİ</h2>
+    <p style="color: #bdc3c7; text-align: center; font-size: 14px;">Lütfen iletişim numaranızı giriniz.<br>Bu alan zorunludur.</p>
+    <input type="tel" id="supportPhone" class="support-input" placeholder="05XX XXX XX XX" maxlength="11">
+    <button id="saveSupportBtn">NUMARAYI KAYDET VE DEVAM ET</button>
+</div>
+
+    <div id="deliverSection" style="display:none;">
+        <div id="timer">00:00:00</div>
+        <label>NÖBETİ TESLİM EDECEĞİNİZ PERSONEL</label>
+        <select id="deliverSelect"></select>
+        <button id="deliverBtn">NÖBETİ TESLİM ET (QR OKUT)</button>
+    </div>
+</div>
+
+<div id="qrScannerModal">
+    <div id="qr-reader"></div>
+    <button id="closeScanner">İPTAL ET</button>
+</div>
+
+<div id="successModal">
+    <h2 id="successText" style="text-align: center; color: #2ecc71;">İŞLEM ONAYLANDI</h2>
+    <button id="thanksBtn">TAMAM</button>
+</div>
+
+<button id="backBtn">GERİ</button>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script type="module">
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { getDatabase, ref, onValue, push, update, get, remove } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+// --- AES ŞİFRE ÇÖZÜCÜ ---
+const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
+
+const decryptData = (encrypted) => {
+    try {
+        const bytes = CryptoJS.AES.decrypt(encrypted, CONFIG_KEY);
+        const dec = bytes.toString(CryptoJS.enc.Utf8);
+        return dec ? JSON.parse(dec) : null;
+    } catch (e) { return null; }
+};
+
+const siteID = localStorage.getItem("siteID");
+const siteConfigStr = localStorage.getItem("siteConfig");
+const siteConfig = decryptData(siteConfigStr); // Şifreyi burada çözüyoruz
+
+// Güvenlik Kontrolü: Config yoksa veya çözülemezse at
+if (!siteID || !siteConfig) { window.location.href = "index.html"; }
+
+let app;
+try {
+    app = getApps().find(a => a.name === `siteApp-${siteID}`) || initializeApp(siteConfig, `siteApp-${siteID}`);
+} catch (e) {
+    app = getApps().find(a => a.name === `siteApp-${siteID}`);
+}
+const db = getDatabase(app);
+const currentUser = JSON.parse(sessionStorage.getItem('currentUser'));
+
+const securitySelect = document.getElementById('securitySelect'), deliverSelect = document.getElementById('deliverSelect');
+const timerEl = document.getElementById('timer'), qrModal = document.getElementById('qrScannerModal');
+const successModal = document.getElementById('successModal'), successText = document.getElementById('successText');
+const supportModal = document.getElementById('supportModal'), 
+      supportPhoneInput = document.getElementById('supportPhone'),
+      saveSupportBtn = document.getElementById('saveSupportBtn');
+let qrScanner=null, timerInterval=null, currentShiftKey=null;
+
+
+
+function startTimer(savedTime){
+    const startTime = new Date(savedTime);
+    if(timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(()=>{
+        const diff = new Date() - startTime;
+        const h = String(Math.floor(diff/3600000)).padStart(2,'0');
+        const m = String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+        const s = String(Math.floor((diff%60000)/1000)).padStart(2,'0');
+        timerEl.innerText = `${h}:${m}:${s}`;
+    },1000);
+}
+
+// --- GÜVENLİK DUVARI VE SİSTEM BAŞLATICI ---
+const auth = getAuth(app);
+
+onAuthStateChanged(auth, (authUser) => {
+    if (!authUser) {
+        // Oturum yoksa yetkisiz girişi engelle
+        window.location.href = "index.html";
+    } else {
+        console.log("KOLART: Nöbet Takip Yetkisi Onaylandı.");
+        // Oturum varsa verileri çekmeye başla
+        initializeSecuritySystems();
+    }
+});
+
+function initializeSecuritySystems() {
+    // 1. Kullanıcı Listesini Çek
+    onValue(ref(db,'users'), snap => {
+        const val = snap.val();
+        securitySelect.innerHTML=''; deliverSelect.innerHTML='';
+        if(val) Object.values(val).forEach(u => {
+            if(u.type==='security' && u.isActive !== false){
+                const name = u.name || u.username;
+                securitySelect.add(new Option(name, u.username || u.name));
+                deliverSelect.add(new Option(name, u.username || u.name));
+            }
+        });
+    });
+
+    // 2. Aktif Nöbeti Kontrol Et
+    onValue(ref(db,'nobetRecords'), snapshot => {
+        const val = snapshot.val();
+        const myActive = val ? Object.entries(val).find(([k, s]) => s.status === 'started' && s.startBy === currentUser.username) : null;
+        if(myActive){
+            currentShiftKey = myActive[0];
+            document.getElementById('shiftSection').style.display='none';
+            document.getElementById('deliverSection').style.display='block';
+            startTimer(myActive[1].startTime);
+        } else {
+            currentShiftKey = null;
+            document.getElementById('shiftSection').style.display='block';
+            document.getElementById('deliverSection').style.display='none';
+            if(timerInterval) clearInterval(timerInterval);
+        }
+    });
+}
+
+async function runSafetyProtocol(isStarting) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = `position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.98); color:white; z-index:100005; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; font-family:sans-serif;`;
+        
+        const title = isStarting ? "NÖBET DEVRALMA KORDİNAT DOĞRULAMA" : "NÖBET TESLİM KORDİNAT DOĞRULAMA";
+        let timeLeft = 20;
+overlay.innerHTML = `
+    <div style="
+        border: 2px solid #e74c3c; 
+        padding: 40px 20px; 
+        border-radius: 24px; 
+        background: rgba(0, 0, 0, 0.4); 
+        width: 90%; 
+        max-width: 420px; 
+        box-shadow: 0 0 40px rgba(231, 76, 60, 0.2);
+        backdrop-filter: blur(10px);
+        border-top: 5px solid #e74c3c; /* Üst kısımdaki kalın hat ciddiyet katar */
+    ">
+        <h2 style="color: #e74c3c; margin: 0 0 10px 0; font-weight: 900; font-size: 18px; letter-spacing: 1px; text-transform: uppercase;">
+            ${title}
+        </h2>
+        
+        <div style="width: 50px; height: 3px; background: #e74c3c; margin: 0 auto 20px auto;"></div>
+
+        <div id="p_timer" style="
+            font-size: 100px; 
+            font-weight: 900; 
+            line-height: 1;
+            margin: 10px 0; 
+            color: #fff; 
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+            font-family: 'Courier New', monospace;
+        ">20</div>
+
+        <div style="margin: 20px 0;">
+            <p style="font-size: 14px; line-height: 1.6; color: #bdc3c7; margin: 0; font-weight: 600;">
+                Okutulan QR Koordinatları Merkeze Gönderiliyor...
+            </p>
+            <p style="font-size: 14px; color: #bdc3c7; margin: 5px 0 0 0; font-weight: 600;">
+                Lütfen Bekleyiniz.
+            </p>
+        </div>
+
+        <div style="
+            margin-top: 25px; 
+            padding: 12px; 
+            border: 1px dashed rgba(241, 196, 15, 0.5); 
+            border-radius: 10px;
+        ">
+            <p style="
+                color: #f1c40f; 
+                font-weight: 900; 
+                font-size: 13px;
+                margin: 0; 
+                letter-spacing: 0.5px;
+                animation: blink-text 1s infinite;
+            ">SÜRE BİTENE KADAR NOKTADAN AYRILMAYIN!</p>
+        </div>
+    </div>
+`;
+        document.body.appendChild(overlay);
+
+        const intr = setInterval(() => {
+            timeLeft--;
+            const pEl = document.getElementById('p_timer');
+            if(pEl) pEl.innerText = timeLeft;
+            if(timeLeft <= 0) {
+                clearInterval(intr);
+                if(document.body.contains(overlay)) document.body.removeChild(overlay);
+            }
+        }, 1000);
+
+        navigator.geolocation.getCurrentPosition(
+            pos => { resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }); },
+            err => { resolve({ lat: "Konum Yok", lng: "Konum Yok" }); },
+            { enableHighAccuracy: true, timeout: 18000 }
+        );
+    });
+}
+
+async function openScanner(callback) {
+    qrModal.style.display='flex';
+    if(qrScanner) await qrScanner.clear();
+    qrScanner = new Html5Qrcode("qr-reader");
+    qrScanner.start({facingMode:"environment"},{fps:10,qrbox:250}, async msg => {
+        await qrScanner.stop();
+        qrModal.style.display='none';
+        const qrSnap = await get(ref(db, 'qrNoktas/' + msg));
+        if(!qrSnap.exists()) { alert("Geçersiz QR Kod!"); return; }
+        callback(qrSnap.val(), msg);
+    }).catch(e => alert("Kamera hatası!"));
+}
+
+document.getElementById('startBtn').addEventListener('click', () => {
+    if(!securitySelect.value) return alert("Lütfen personel seçin!");
+    
+    // Eğer giriş yapan DESTEK PERSONEL ise önce numara iste
+    if(currentUser.username === "DESTEK PERSONEL") {
+        supportModal.style.display = 'flex';
+    } else {
+        proceedToStartShift(); // Normal personelse direkt devam et
+    }
+});
+
+// Numara kaydetme butonuna tıklandığında
+saveSupportBtn.addEventListener('click', async () => {
+    const phone = supportPhoneInput.value.trim();
+    if(phone.length < 10) return alert("Lütfen geçerli bir telefon numarası giriniz!");
+    
+    try {
+        // Firebase'de telefon numarasını güncelle
+        await update(ref(db, 'users/DESTEK PERSONEL'), { phone: phone });
+        supportModal.style.display = 'none';
+        proceedToStartShift(); // Numara güncellendikten sonra QR'a geç
+    } catch(e) { alert("Bağlantı hatası: " + e.message); }
+});
+
+// QR ve Nöbet Başlatma Fonksiyonu (Eski kodunun içindeki mantık)
+function proceedToStartShift() {
+    openScanner(async (qrData, qrId) => {
+        const coords = await runSafetyProtocol(true);
+        const record = {
+            startBy: currentUser.username, fromSecurity: securitySelect.value,
+            startPoint: qrData.name || qrId, shift: document.getElementById('shiftSelect').value,
+            startTime: new Date().toISOString(), status: 'started',
+            startLat: coords.lat, startLng: coords.lng
+        };
+        await push(ref(db, 'nobetRecords'), record);
+        
+        successText.innerHTML = `
+            <div style="font-size: 22px; font-weight: 900; color: #2ecc71; margin-bottom: 15px;">İŞLEM ONAYLANDI</div>
+            <div style="font-size: 15px; color: #ecf0f1; font-weight: 600;">Nöbet Başlatıldı.<br><span style="color: #f1c40f;">İYİ NÖBETLER</span></div>
+        `;
+        successModal.style.display = 'flex';
+    });
+}
+
+document.getElementById('deliverBtn').addEventListener('click', () => {
+    if(!currentShiftKey) return;
+    const toSec = deliverSelect.value;
+    
+    openScanner(async (qrData, qrId) => {
+        const coords = await runSafetyProtocol(false);
+        const snap = await get(ref(db, 'nobetRecords/' + currentShiftKey));
+        const baslangicVerisi = snap.val();
+
+        // 1. Tarihi Ayarla (Firebase hatası almamak için aralara tire koyuyoruz)
+        const simdi = new Date();
+        const gun = String(simdi.getDate()).padStart(2, '0');
+        const ay = String(simdi.getMonth() + 1).padStart(2, '0');
+        const yil = simdi.getFullYear();
+        const klasorAdi = `${gun}-${ay}-${yil}`; 
+
+        const bitisZamani = simdi.toISOString();
+        const calismaSuresiDakika = Math.round((new Date(bitisZamani) - new Date(baslangicVerisi.startTime)) / 60000);
+
+        // 2. TÜRKÇE VERİ PAKETİ
+        const tamamlananKayit = {
+            // Başlangıçtan gelenleri Türkçeleştirerek aktaralım
+            personel_adi: baslangicVerisi.startBy,
+            vardiya_tipi: baslangicVerisi.shift,
+            devralinan_personel: baslangicVerisi.fromSecurity,
+            baslangic_noktasi: baslangicVerisi.startPoint,
+            baslangic_zamani: baslangicVerisi.startTime,
+            baslangic_koord_lat: baslangicVerisi.startLat,
+            baslangic_koord_lng: baslangicVerisi.startLng,
+
+            // Bitiş (Teslim) Bilgileri
+            teslim_eden: currentUser.username, 
+            teslim_alan: toSec,
+            bitis_noktasi: qrData.name || qrId,
+            bitis_zamani: bitisZamani,
+            bitis_koord_lat: coords.lat,
+            bitis_koord_lng: coords.lng,
+            toplam_calisma_dakika: calismaSuresiDakika,
+            durum: 'tamamlandi'
+        };
+
+        // 3. KAYIT YOLU: tamamnbt / 11-03-2026
+        const kayitYolu = `tamamnbt/${klasorAdi}`;
+
+        try {
+            await push(ref(db, kayitYolu), tamamlananKayit);
+            await remove(ref(db, 'nobetRecords/' + currentShiftKey));
+			// --- SIFIRLAMA MANTIĞI: Destek personeli ise numarasını temizle ---
+if(currentUser.username === "DESTEK PERSONEL") {
+    await update(ref(db, 'users/DESTEK PERSONEL'), { phone: "" });
+}
+
+            successText.innerHTML = `
+                <div style="font-size: 22px; font-weight: 900; color: #2ecc71; margin-bottom: 15px;">İŞLEM ONAYLANDI</div>
+                <div style="font-size: 15px; color: #ecf0f1; font-weight: 600;">
+                    Nöbet Kaydı Arşivlendi: <br>
+                    <span style="color:#f1c40f; font-size: 18px;">📅 ${klasorAdi}</span><br>
+                    <span style="color: #2ecc71; display: block; margin-top: 10px;">İyi istirahatler dileriz.</span>
+                </div>
+            `;
+            successModal.style.display = 'flex';
+        } catch (error) {
+            alert("Kayıt hatası: " + error.message);
+        }
+    });
+});
+
+document.getElementById('thanksBtn').addEventListener('click', () => { window.location.href="guvenlik.html"; });
+document.getElementById('closeScanner').addEventListener('click', () => { if(qrScanner) qrScanner.stop(); qrModal.style.display='none'; });
+document.getElementById("backBtn").addEventListener("click", () => { window.location.href = "guvenlik.html"; });
+</script>
+</body>
+</html>
