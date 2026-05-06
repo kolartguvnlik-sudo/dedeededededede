@@ -134,7 +134,7 @@
     </header>
 
 <div class="info-card">
-    <div id="eliteSelectBadge" onclick="openBlockModal()">SEÇ</div>
+    <div id="eliteSelectBadge" onclick="openBlockModal()">SE</div>
         <p class="card-label">AKTİF DEVRİYE ROTASI</p>
         <h2 class="route-title" id="routeName">YÜKLENİYOR...</h2>
         <div class="progress-line">
@@ -364,20 +364,20 @@ let eqStatus = { gps: null, fener: null, yelek: null };
     window.closeAppModal = () => { document.getElementById('appModal').style.display = 'none'; };
 
 function checkConnectivity() {
-        const bar = document.getElementById('offlineAlertBar');
-        if (navigator.onLine) { 
-            bar.style.display = 'none'; 
-            // İNTERNET GELDİĞİNDE: Eğer devriye açıksa yereldeki noktaları Firebase'e fırlat
-            if (devriyeStarted && readPoints.length > 0) {
-                update(activeDevriyeRef, { 
-                    startTime: startTime.toISOString(),
-                    readPoints: readPoints 
-                }).then(() => console.log("Bağlantı geldi, aktif veriler Firebase ile eşlendi."));
-            }
-        } else { 
-            bar.style.display = 'block'; 
+    const bar = document.getElementById('offlineAlertBar');
+    if (navigator.onLine) { 
+        bar.style.display = 'none'; 
+        
+        // İNTERNET GELDİĞİ AN:
+        if (devriyeStarted) {
+            // Yereldeki güncel listeyi Firebase'e bas
+            sendActiveDataToFirebase();
         }
+        syncOutbox(); // Bitmiş devriyeler varsa onları da gönder
+    } else { 
+        bar.style.display = 'block'; 
     }
+}
     window.addEventListener('online', () => { checkConnectivity(); syncOutbox(); });
     window.addEventListener('offline', checkConnectivity);
 window.checkEq = (tip, cevap) => {
@@ -440,6 +440,20 @@ async function init() {
             readPoints: readPoints
         }));
     }
+	// --- SENKRONİZASYON MOTORU ---
+async function sendActiveDataToFirebase() {
+    if (!devriyeStarted || !navigator.onLine) return;
+    
+    try {
+        await update(activeDevriyeRef, { 
+            startTime: startTime.toISOString(),
+            readPoints: readPoints 
+        });
+        console.log("Bulut eşitlemesi başarılı.");
+    } catch (e) {
+        console.error("Senkronizasyon hatası:", e);
+    }
+}
 document.getElementById('backHomeBtn').onclick = () => {
     window.location.href = "guvenlik.html";
 };
@@ -729,29 +743,24 @@ function finalizeGpsSearch(name) {
     }
 
 function pushPoint(name, lat, lng, acc) {
-        if (!readPoints.some(p => p.name === name)) {
-            // Diziyi güncelle
-// Artık her noktayı hangi blokta okuttuğunu da kaydediyoruz
-readPoints.push({ 
-    block: currentBlock, 
-    name: name, 
-    time: new Date().toLocaleTimeString('tr-TR'), 
-    lat, lng, acc 
-});            
-            // UI'ı güncelle ve telefona hemen kaydet
-            updateUIVisually(name);
-            saveToLocal();
-            
-            // CANLI SENKRONİZASYON: İnternet varsa anında bulutu güncelle
-            if(navigator.onLine) {
-                update(activeDevriyeRef, { 
-                    startTime: startTime.toISOString(),
-                    readPoints: readPoints 
-                }).catch(e => console.log("Anlık bulut güncelleme hatası."));
-            }
+    if (!readPoints.some(p => p.name === name)) {
+        readPoints.push({ 
+            block: currentBlock, 
+            name: name, 
+            time: new Date().toLocaleTimeString('tr-TR'), 
+            lat, lng, acc 
+        });            
+        
+        // Önce UI ve Yerel Hafıza (İnternet olsa da olmasa da)
+        updateUIVisually(name);
+        saveToLocal();
+        
+        // İnternet varsa hemen gönder
+        if(navigator.onLine) {
+            sendActiveDataToFirebase();
         }
     }
-
+}
     function startTimerLoop() {
         const timerInt = setInterval(() => {
             if(!devriyeStarted) { clearInterval(timerInt); return; }
@@ -765,122 +774,87 @@ readPoints.push({
 
 let isFinalizing = false; 
 
-document.getElementById('endBtn').onclick = async () => { // async eklendi!
-    if (isFinalizing) return; 
-
-    // 1. İNTERNET VE SENKRONİZASYON KONTROLÜ
-    if (navigator.onLine) {
-        // "Bitir"e basıldığı an yereldeki (offline) verileri zorla Firebase'e itiyoruz
-        try {
-            // Kullanıcıya bir geri bildirim verelim
-            const eBtn = document.getElementById('endBtn');
-            const originalText = eBtn.innerText;
-            eBtn.innerText = "SENKRONİZE EDİLİYOR...";
-            eBtn.style.opacity = "0.7";
-
-            await update(activeDevriyeRef, { 
-                startTime: startTime.toISOString(), 
-                readPoints: readPoints 
-            });
-            
-            console.log("Veriler bitirme öncesi başarıyla senkronize edildi.");
-            eBtn.innerText = originalText;
-            eBtn.style.opacity = "1";
-        } catch (e) {
-            console.error("Senkron hatası ama devam ediliyor:", e);
-        }
-    } else {
-        showAppModal("İŞLEM ENGELLENDİ", "İnternet yokken devriye bitirilemez!", "cloud_off"); 
-        return; 
-    }
+    document.getElementById('endBtn').onclick = () => {
+        if (isFinalizing) return; 
+        if (!navigator.onLine) { showAppModal("İŞLEM ENGELLENDİ", "İnternet yokken devriye bitirilemez!", "cloud_off"); return; }
         
-    // 2. EKSİK NOKTA TESPİTİ
-    const allCards = document.querySelectorAll('.qr-card');
-    const eksikNoktalar = [];
+        const allCards = document.querySelectorAll('.qr-card');
+        const eksikNoktalar = [];
+        
+     allCards.forEach(card => {
+    // Karttaki başlığı al ve boşlukları temizle
+    const karttakiHamIsim = card.querySelector('h3').innerText.trim();
     
-    allCards.forEach(card => {
-        const karttakiHamIsim = card.querySelector('h3').innerText.trim();
-        const okutulduMu = readPoints.some(rp => 
-            rp.name.trim().toLocaleLowerCase('tr-TR') === karttakiHamIsim.toLocaleLowerCase('tr-TR')
-        );
+    // TÜRKÇE UYUMLU KONTROL: okunanlarda bu isim var mı?
+    const okutulduMu = readPoints.some(rp => 
+        rp.name.trim().toLocaleLowerCase('tr-TR') === karttakiHamIsim.toLocaleLowerCase('tr-TR')
+    );
 
-        if (!okutulduMu) {
-            eksikNoktalar.push(karttakiHamIsim);
-        }
-    });
-
-    // 3. FİNALİZASYON SÜREÇLERİ
-    if (eksikNoktalar.length > 0) {
-        document.getElementById('confirmModal').style.display = 'flex';
-        const noteArea = document.getElementById('incidentNote');
-        const submitBtn = document.getElementById('forceFinishBtn');
-        const warning = document.getElementById('charWarning');
-        
-        noteArea.oninput = () => {
-            const len = noteArea.value.trim().length;
-            if(len >= 15) {
-                submitBtn.disabled = false;
-                warning.innerText = "Yeterli açıklama yazıldı ✓";
-                warning.style.color = "var(--primary)";
-            } else {
-                submitBtn.disabled = true;
-                warning.innerText = `En az ${15 - len} karakter daha...`;
-                warning.style.color = "#ff3b30";
-            }
-        };
-
-        submitBtn.onclick = async () => {
-            if (isFinalizing) return;
-            isFinalizing = true; 
-            submitBtn.disabled = true;
-            submitBtn.style.pointerEvents = "none";
-            submitBtn.style.opacity = "0.4";
-            
-            const icon = document.getElementById('finishIcon');
-            const text = document.getElementById('finishText');
-            if(icon) { icon.innerText = "sync"; icon.style.animation = "pulse 1s infinite"; }
-            if(text) text.innerText = "ŞİRKETE GÖNDERİLİYOR...";
-
-            await finalizePatrol(noteArea.value, eksikNoktalar);
-        };
-    } else { 
-        isFinalizing = true; 
-        const eBtn = document.getElementById('endBtn');
-        eBtn.style.pointerEvents = "none";
-        eBtn.style.opacity = "0.5";
-        eBtn.innerText = "GÖNDERİLİYOR..."; 
-
-        await finalizePatrol("Eksiksiz tamamlandı.", []); 
+    if (!okutulduMu) {
+        eksikNoktalar.push(karttakiHamIsim);
     }
-};
+});
+
+        if (eksikNoktalar.length > 0) {
+            document.getElementById('confirmModal').style.display = 'flex';
+            const noteArea = document.getElementById('incidentNote');
+            const submitBtn = document.getElementById('forceFinishBtn');
+            const warning = document.getElementById('charWarning');
+            
+            noteArea.oninput = () => {
+                const len = noteArea.value.trim().length;
+                if(len >= 15) {
+                    submitBtn.disabled = false;
+                    warning.innerText = "Yeterli açıklama yazıldı ✓";
+                    warning.style.color = "var(--primary)";
+                } else {
+                    submitBtn.disabled = true;
+                    warning.innerText = `En az ${15 - len} karakter daha...`;
+                    warning.style.color = "#ff3b30";
+                }
+            };
+
+            submitBtn.onclick = async () => {
+                if (isFinalizing) return;
+                isFinalizing = true; 
+                submitBtn.disabled = true;
+                submitBtn.style.pointerEvents = "none";
+                submitBtn.style.opacity = "0.4";
+                
+                const icon = document.getElementById('finishIcon');
+                const text = document.getElementById('finishText');
+                if(icon) { icon.innerText = "sync"; icon.style.animation = "pulse 1s infinite"; }
+                if(text) text.innerText = "ŞİRKETE GÖNDERİLİYOR...";
+
+                await finalizePatrol(noteArea.value, eksikNoktalar);
+            };
+        } else { 
+            // BURASI DEĞİŞTİ: TAM BİTİRİRKEN DE YAZI ÇIKACAK VE KİLİTLENECEK
+            isFinalizing = true; 
+            const eBtn = document.getElementById('endBtn');
+            eBtn.style.pointerEvents = "none";
+            eBtn.style.opacity = "0.5";
+            eBtn.innerText = "GÖNDERİLİYOR..."; // Personel bunu görecek
+
+            finalizePatrol("Eksiksiz tamamlandı.", []); 
+        }
+    };
+
 async function finalizePatrol(note = "", eksikListesi = []) {
     try {
-        // 1. ZORUNLU GÜVENLİK: İnternet yoksa raporu bitirtme (Hata alırsın)
-        if (!navigator.onLine) {
-            showAppModal("BAĞLANTI YOK", "İnternet gelmeden devriye sonlandırılamaz!", "wifi_off");
-            isFinalizing = false;
-            // Butonları eski haline getir
-            const sBtn = document.getElementById('forceFinishBtn');
-            const eBtn = document.getElementById('endBtn');
-            if(sBtn) { sBtn.disabled = false; sBtn.style.opacity = "1"; sBtn.style.pointerEvents = "auto"; }
-            if(eBtn) { eBtn.innerText = "BİTİR"; eBtn.style.opacity = "1"; eBtn.style.pointerEvents = "auto"; }
-            return;
-        }
-
-        // 2. VERİ HAZIRLAMA (Log oluşturma)
         const referenceDate = startTime || new Date();
         const yil = referenceDate.getFullYear();
         const ay = String(referenceDate.getMonth() + 1).padStart(2, '0');
         const gun = String(referenceDate.getDate()).padStart(2, '0');
         const dinamikDateKey = `${yil}-${ay}-${gun}`; 
 
-        const log = {
+      const log = {
             user: currentUser.username,
             name: currentUser.name || currentUser.username,
             bolge: currentBlock,
             start: startTime.toLocaleTimeString('tr-TR'),
             end: new Date().toLocaleTimeString('tr-TR'),
-            points: readPoints, // Burada o okunan 3 nokta da var
+            points: readPoints,
             missedPoints: eksikListesi, 
             ekipmanlar: eqStatus, 
             status: eksikListesi.length > 0 ? "Eksik Devriye" : "TAM DEVRİYE",
@@ -891,37 +865,30 @@ async function finalizePatrol(note = "", eksikListesi = []) {
             dateKey: dinamikDateKey
         };
 
-        // 3. KRİTİK SIRALAMA: Önce veriyi Outbox'a yedekle (Çökme ihtimaline karşı)
+        // --- MERKEZ EKSİK DEVRİYE BİLDİRİMİ ---
+        if (eksikListesi.length > 0) {
+            // Sadece eksiklik varsa merkezdeki hasMissingPatrol'ü true yapar
+            await set(ref(merkezDb, "sites/" + siteID + "/hasMissingPatrol"), true);
+        }
+        // Yerel yedeği sil ve outbox'a ekle
+        localStorage.removeItem(OFFLINE_STORAGE_KEY);
         let outbox = JSON.parse(localStorage.getItem(OUTBOX_STORAGE_KEY) || "[]");
         outbox.push(log);
         localStorage.setItem(OUTBOX_STORAGE_KEY, JSON.stringify(outbox));
-
-        // 4. EKSİK BİLDİRİMİ (Merkez Paneline)
-        if (eksikListesi.length > 0) {
-            await set(ref(merkezDb, "sites/" + siteID + "/hasMissingPatrol"), true);
-        }
-
-        // 5. ŞİMDİ SENKRONİZE ET (Veriyi history'ye gönder)
+        
+        // Firebase'deki aktif devriyeyi temizle ve senkronize et
+        await set(activeDevriyeRef, null); 
         await syncOutbox(); 
-
-        // 6. HER ŞEY BAŞARILIYSA TEMİZLİK YAP
-        localStorage.removeItem(OFFLINE_STORAGE_KEY); // Yerel yedeği sil
-        await set(activeDevriyeRef, null); // Firebase'deki "Aktif Devriye"yi sil (Burası boşalınca panelden düşer)
         
         showAppModal("BAŞARILI", "Rapor merkeze iletildi.", "check_circle");
         setTimeout(() => { window.location.href = "guvenlik.html"; }, 2000);
 
     } catch (error) {
         console.error("Kritik Hata:", error);
-        isFinalizing = false; // Kilidi aç ki personel tekrar basabilsin
-        
-        // Butonları canlandır
+        isFinalizing = false; // Hata olursa kilidi aç ki personel tekrar deneyebilsin
         const sBtn = document.getElementById('forceFinishBtn');
-        const eBtn = document.getElementById('endBtn');
         if(sBtn) { sBtn.disabled = false; sBtn.style.pointerEvents = "auto"; sBtn.style.opacity = "1"; }
-        if(eBtn) { eBtn.innerText = "BİTİR"; eBtn.style.opacity = "1"; eBtn.style.pointerEvents = "auto"; }
-        
-        showAppModal("HATA", "İşlem sırasında bir sorun oluştu. Lütfen tekrar deneyin.", "error");
+        showAppModal("BAĞLANTI HATASI", "Rapor iletilemedi. Tekrar deneyin.", "error");
     }
 }
 
@@ -1004,6 +971,7 @@ window.openBlockModal = async () => {
 document.getElementById('incidentBtn').onclick = () => {
     window.location.href = "olay.html";
 };
+
 </script>
 </body>
 </html>
