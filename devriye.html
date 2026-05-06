@@ -134,7 +134,7 @@
     </header>
 
 <div class="info-card">
-    <div id="eliteSelectBadge" onclick="openBlockModal()">SEN</div>
+    <div id="eliteSelectBadge" onclick="openBlockModal()">SEÇ</div>
         <p class="card-label">AKTİF DEVRİYE ROTASI</p>
         <h2 class="route-title" id="routeName">YÜKLENİYOR...</h2>
         <div class="progress-line">
@@ -297,7 +297,6 @@ const merkezConfig = {
 };
 const merkezApp = getApps().find(a => a.name === "merkezApp") || initializeApp(merkezConfig, "merkezApp");
 const merkezDb = getDatabase(merkezApp);
-
 // --- AES ŞİFRE ÇÖZÜCÜ ---
 const CONFIG_KEY = "KOLART_SİSTEM_2026_CGA"; 
 const decryptData = (encrypted) => {
@@ -855,58 +854,90 @@ async function finalizePatrol(note = "", eksikListesi = []) {
         }
         localStorage.setItem(OUTBOX_STORAGE_KEY, "[]");
     }
+
+// --- SEÇ BUTONU YETKİ KONTROLÜ (CANLI DİNLEME) ---
+// Bu kısım sayfa açıldığında çalışır, ayar değişirse butonu gizler/gösterir
 onValue(ref(db, 'settings/allowPointChange'), (snap) => {
-    silentTrafficLogger("Blok_Degistirme_Yetki_Kontrolu", "DINLEME", snap.val());
     const badge = document.getElementById('eliteSelectBadge');
-    if (snap.exists() && snap.val() === true) {
-        badge.style.display = 'block';
-    } else {
-        badge.style.display = 'none';
+    if (badge) {
+        if (snap.exists() && snap.val() === true) {
+            badge.style.display = 'block';
+        } else {
+            badge.style.display = 'none';
+        }
     }
 });
+
+// --- BLOK SEÇME MODAL FONKSİYONU ---
 window.openBlockModal = async () => {
+    // İnternet kontrolü
+    if(!navigator.onLine) { 
+        showAppModal("BAĞLANTI YOK", "Blok değiştirmek için internet lazım.", "wifi_off"); 
+        return; 
+    }
+    
     const modal = document.getElementById('blockSelectModal');
     const area = document.getElementById('blockListArea');
+    
+    // Modalı aç ve yükleniyor yazısını bas
     modal.style.display = 'flex';
-    area.innerHTML = `LİSTE ÇEKİLİYOR...`;
+    area.innerHTML = `<div style="color:#fff; padding:20px; text-align:center; font-weight:bold;">LİSTE ÇEKİLİYOR...</div>`;
 
     try {
-        // Tüm veritabanını değil, sadece blok isimlerinin olduğu listeyi çekiyoruz (KOTA DOSTU)
-        const listSnap = await get(ref(db, 'noktaListe'));
+        // Senin istediğin o hafifletilmiş yapı: Sadece noktaListe/siteID altını çekiyoruz
+        // Not: Eğer noktaListe direkt root altındaysa ref(db, 'noktaListe') olarak kalabilir
+        const listSnap = await get(ref(db, `noktaListe/${siteID}`)); 
         
         if (listSnap.exists()) {
             area.innerHTML = "";
             const blocks = listSnap.val(); 
 
+            // Veritabanındaki { "Blok A": true, "Blok B": true } yapısını dönüyoruz
             Object.keys(blocks).forEach(b => {
-                if(blocks[b] === true) { // Sadece aktif olan bloklar
+                if(blocks[b] === true) {
                     const btn = document.createElement('button');
-                    btn.innerText = b; // Blok adı (Örn: "A BLOK")
-                    btn.className = "elite-select-btn"; // Stil sınıfın
+                    
+                    // Senin orijinal buton stilin
+                    btn.style.cssText = "background:#222; color:#fff; border:1.5px solid var(--border); padding:18px; border-radius:20px; font-weight:900; font-size:13px; text-transform:uppercase; margin:8px; width:calc(100% - 16px); transition: 0.3s active;";
+                    btn.innerText = b;
 
                     btn.onclick = async () => {
-                        // 1. Kullanıcının aktif nöbet kaydını bul
-                        const nSnap = await get(ref(db, 'nobetRecords'));
+                        // Tıklandığında aktif nöbeti bul
+                        const nSnap = await get(nobetRef);
                         const activeKey = Object.keys(nSnap.val() || {}).find(k => 
-                            nSnap.val()[k].startBy === currentUser.username && 
+                            nSnap.val()[k].startBy === (currentUser.name || currentUser.username) && 
                             nSnap.val()[k].status === 'started'
                         );
 
                         if (activeKey) {
-                            // 2. Veritabanındaki startPoint alanını yeni seçilen blokla güncelle
+                            // Seçilen ismi (b) direkt startPoint olarak gönderiyoruz
+                            // Bu sayede loadQRInterface fonksiyonun otomatik olarak "b + qrcodes"u bulacak
                             await update(ref(db, `nobetRecords/${activeKey}`), { 
                                 startPoint: b 
                             });
                             
-                            // 3. Sayfayı yenile ki yeni bloğun QR noktaları yüklensin
+                            // Ayarı yap ve sayfayı tazele
                             location.reload(); 
+                        } else {
+                            showAppModal("HATA", "Aktif bir nöbet kaydı bulunamadı!", "error");
                         }
                     };
                     area.appendChild(btn);
                 }
             });
+            
+            // Eğer içinde true olan kayıt yoksa
+            if(area.innerHTML === "") {
+                area.innerHTML = `<div style="color:#fff; padding:20px; text-align:center;">AKTİF NOKTA BULUNAMADI</div>`;
+            }
+
+        } else {
+            area.innerHTML = `<div style="color:#fff; padding:20px; text-align:center;">LİSTE BOŞ</div>`;
         }
-    } catch(e) { console.error("Hata:", e); }
+    } catch(e) {
+        console.error("Blok listesi çekilirken hata:", e);
+        area.innerHTML = `<div style="color:#ff3b30; padding:20px; text-align:center;">HATA: Liste alınamadı!</div>`;
+    }
 };
 </script>
 </body>
